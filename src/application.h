@@ -21,4 +21,6 @@ class Application {
 	uint32_t height = DEFAULT_HEIGHT;
 
 	bool running = false;
+
+	void showError(const std::string &errorMessage);
 };

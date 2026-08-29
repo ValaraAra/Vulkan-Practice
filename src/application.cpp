@@ -2,16 +2,28 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+void Application::showError(const std::string &errorMessage) {
+	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", errorMessage.c_str(), window);
+}
+
 bool Application::initialize() {
+	// SDL initialization
 	if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
-		SDL_Log("SDL initialization failed: %s", SDL_GetError());
+		showError("SDL - Initialization failed!");
 		return false;
 	}
 
+	// SDL window creation
 	window = SDL_CreateWindow("Vulkan Practice", width, height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
-
 	if (!window) {
-		SDL_Log("Window creation failed: %s", SDL_GetError());
+		showError("SDL - Window creation failed!");
+		return false;
+	}
+
+	// Renderer initialization
+	std::string rendererMessage;
+	if (!renderer.initialize(width, height, rendererMessage)) {
+		showError("Renderer - Initialization failed: " + rendererMessage);
 		return false;
 	}
 
@@ -22,21 +34,23 @@ void Application::run() {
 	running = true;
 
 	while (running) {
+		// Handle events
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
-			// Handle exit/quit
 			if (event.type == SDL_EVENT_QUIT) {
 				running = false;
 				break;
 			}
 
-			// Handle resize
 			if (event.type == SDL_EVENT_WINDOW_RESIZED) {
 				width = event.window.data1;
 				height = event.window.data2;
 				break;
 			}
 		}
+
+		// Render
+		renderer.render();
 	}
 }
 
