@@ -1,5 +1,9 @@
 BasedOnStyle: LLVM
 IndentWidth: 4
 TabWidth: 4
-UseTab: ForIndentation
+UseTab: Always
+AlignAfterOpenBracket: DontAlign
 ColumnLimit: 125
+BreakBeforeBraces: Custom
+BraceWrapping:
+	AfterFunction: true

@@ -23,6 +23,10 @@ else()
 	target_compile_options(vulkanapp PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+	target_compile_options(vulkanapp PRIVATE -Wno-missing-designated-field-initializers)
+endif()
+
 target_link_libraries(vulkanapp PRIVATE
 	Vulkan::volk
 	Vulkan::shaderc_combined
