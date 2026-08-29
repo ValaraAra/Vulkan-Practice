@@ -13,6 +13,7 @@ add_executable(vulkanapp
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if (MSVC)
 	target_compile_options(vulkanapp PRIVATE /W4 /WX)

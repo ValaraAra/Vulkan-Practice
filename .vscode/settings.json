@@ -1,6 +1,26 @@
 {
+	// CMake
 	"cmake.generator": "Ninja",
 	"cmake.configureArgs": [
 		"-DCMAKE_TOOLCHAIN_FILE=${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-	]
+	],
+
+	// Clangd
+	"clangd.arguments": [
+		"--compile-commands-dir=${workspaceFolder}/build",
+		"--header-insertion=iwyu",
+		"--clang-tidy"
+	],
+	"[cpp]": {
+		"editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
+		"editor.formatOnSave": true
+	},
+	"C_Cpp.intelliSenseEngine": "disabled",
+
+	// Editor
+	"editor.insertSpaces": false,
+	"editor.tabSize": 4,
+	"editor.detectIndentation": false,
+	"editor.rulers": [125],
+	"editor.wordWrapColumn": 125
 }
