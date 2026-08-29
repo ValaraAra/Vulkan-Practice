@@ -7,6 +7,8 @@ find_package(glm REQUIRED)
 
 add_executable(vulkanapp
 	"src/main.cpp"
+	"src/application.h"
+	"src/application.cpp"
 )
 
 set(CMAKE_CXX_STANDARD 26)
