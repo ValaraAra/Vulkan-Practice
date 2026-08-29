@@ -9,6 +9,8 @@ add_executable(vulkanapp
 	"src/main.cpp"
 	"src/application.h"
 	"src/application.cpp"
+	"src/renderer.h"
+	"src/renderer.cpp"
 )
 
 set(CMAKE_CXX_STANDARD 26)

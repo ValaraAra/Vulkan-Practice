@@ -29,7 +29,7 @@ void Application::run() {
 				running = false;
 				break;
 			}
-			
+
 			// Handle resize
 			if (event.type == SDL_EVENT_WINDOW_RESIZED) {
 				width = event.window.data1;
