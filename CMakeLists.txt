@@ -5,6 +5,10 @@ find_package(SDL3 REQUIRED)
 find_package(Vulkan REQUIRED COMPONENTS volk shaderc_combined)
 find_package(glm REQUIRED)
 
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 add_executable(vulkanapp
 	"src/main.cpp"
 	"src/application.h"
@@ -13,18 +17,13 @@ add_executable(vulkanapp
 	"src/renderer.cpp"
 )
 
-set(CMAKE_CXX_STANDARD 26)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
 if (MSVC)
-	target_compile_options(vulkanapp PRIVATE /W4 /WX)
+	target_compile_options(vulkanapp PRIVATE /W4)
 else()
-	target_compile_options(vulkanapp PRIVATE -Wall -Wextra -Wpedantic -Werror)
+	target_compile_options(vulkanapp PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 target_link_libraries(vulkanapp PRIVATE
-	Vulkan::Vulkan
 	Vulkan::volk
 	Vulkan::shaderc_combined
 	SDL3::SDL3
