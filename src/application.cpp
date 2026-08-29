@@ -1,6 +1,5 @@
 #include "application.h"
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
 
 void Application::showError(const std::string &errorMessage) {
 	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", errorMessage.c_str(), window);
@@ -9,14 +8,14 @@ void Application::showError(const std::string &errorMessage) {
 bool Application::initialize() {
 	// SDL initialization
 	if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
-		showError("SDL - Initialization failed!");
+		showError("SDL - Initialization failed! " + std::string(SDL_GetError()));
 		return false;
 	}
 
 	// SDL window creation
 	window = SDL_CreateWindow("Vulkan Practice", width, height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 	if (!window) {
-		showError("SDL - Window creation failed!");
+		showError("SDL - Window creation failed! " + std::string(SDL_GetError()));
 		return false;
 	}
 
