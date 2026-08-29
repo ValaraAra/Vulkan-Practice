@@ -9,7 +9,8 @@
 	"clangd.arguments": [
 		"--compile-commands-dir=${workspaceFolder}/build",
 		"--header-insertion=iwyu",
-		"--clang-tidy"
+		"--clang-tidy",
+		"-Wno-missing-designated-field-initializers"
 	],
 	"[cpp]": {
 		"editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
