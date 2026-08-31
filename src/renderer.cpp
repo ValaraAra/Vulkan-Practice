@@ -186,7 +186,26 @@ VkPhysicalDevice Renderer::selectPhysicalDevice()
 
 bool Renderer::selectGraphicsQueue()
 {
-	errorCallback("Graphics queue selection not implemented.");
+	// Get queue family count
+	uint32_t queueFamilyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, &queueFamilyCount, nullptr);
+
+	// Get queue family properties
+	std::vector<VkQueueFamilyProperties2> queueFamilies(queueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, &queueFamilyCount, queueFamilies.data());
+
+	// Select one that supports both graphics and presentation
+	for (uint32_t i = 0; i < queueFamilyCount; ++i) {
+		VkBool32 presentSupport = VK_FALSE;
+		vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface, &presentSupport);
+
+		const VkQueueFamilyProperties2 &queueFamily = queueFamilies[i];
+		if (presentSupport == VK_TRUE && queueFamily.queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+			graphicsQueueFamilyIndex = i;
+			return true;
+		}
+	}
+
 	return false;
 }
 
