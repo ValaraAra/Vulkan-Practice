@@ -148,10 +148,40 @@ bool Renderer::createSurface()
 	return true;
 }
 
+// Defaults to first device, but will try to find a discrete GPU if available.
+// - Replace with a more sophisticated selection algorithm at some point!
 VkPhysicalDevice Renderer::selectPhysicalDevice()
 {
-	errorCallback("Physical device selection not implemented.");
-	return VK_NULL_HANDLE;
+	uint32_t physicalDeviceCount = 0;
+	vkEnumeratePhysicalDevices(vulkanInstance, &physicalDeviceCount, nullptr);
+
+	std::vector<VkPhysicalDevice> physicalDevices(physicalDeviceCount);
+	vkEnumeratePhysicalDevices(vulkanInstance, &physicalDeviceCount, physicalDevices.data());
+
+	if (physicalDeviceCount == 0) {
+		errorCallback("No physical devices found.");
+		return VK_NULL_HANDLE;
+	}
+
+	// Default to first device
+	VkPhysicalDevice physicalDevice = physicalDevices[0];
+
+	// Try to find a discrete GPU
+	for (const auto &device : physicalDevices) {
+		VkPhysicalDeviceProperties deviceProperties{};
+		vkGetPhysicalDeviceProperties(device, &deviceProperties);
+
+		if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+			physicalDevice = device;
+			break;
+		}
+	}
+
+	VkPhysicalDeviceProperties props{};
+	vkGetPhysicalDeviceProperties(physicalDevice, &props);
+	std::cout << "Selected physical device: " << props.deviceName << std::endl;
+
+	return physicalDevice;
 }
 
 bool Renderer::selectGraphicsQueue()
