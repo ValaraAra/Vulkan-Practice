@@ -95,10 +95,6 @@ bool Renderer::initialize(SDL_Window *window, std::function<void(const std::stri
 	return true;
 }
 
-void Renderer::render() {}
-
-void Renderer::shutdown() {}
-
 bool Renderer::createVulkanInstance()
 {
 	VkApplicationInfo applicationInfo{
@@ -209,3 +205,7 @@ bool Renderer::createCommandBuffers()
 	errorCallback("Command buffers creation not implemented.");
 	return false;
 }
+
+void Renderer::render() {}
+
+void Renderer::shutdown() {}
