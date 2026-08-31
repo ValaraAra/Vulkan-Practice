@@ -208,4 +208,11 @@ bool Renderer::createCommandBuffers()
 
 void Renderer::render() {}
 
-void Renderer::shutdown() {}
+void Renderer::shutdown()
+{
+	if (vulkanInstance) {
+		vkDestroyInstance(vulkanInstance, nullptr);
+		vulkanInstance = VK_NULL_HANDLE;
+	}
+	volkFinalize();
+}
