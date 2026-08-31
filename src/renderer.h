@@ -40,8 +40,8 @@ class Renderer {
 
 	bool createVulkanInstance();
 	bool createSurface();
-	VkPhysicalDevice findPhysicalDevice();
-	bool findGraphicsQueue();
+	VkPhysicalDevice selectPhysicalDevice();
+	bool selectGraphicsQueue();
 	bool createDevice(VkPhysicalDevice physicalDevice);
 	bool initializeVMA();
 	bool createSwapchain(uint32_t width, uint32_t height);

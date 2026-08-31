@@ -39,14 +39,14 @@ bool Renderer::initialize(SDL_Window *window, std::function<void(const std::stri
 		return false;
 	}
 
-	physicalDevice = findPhysicalDevice();
+	physicalDevice = selectPhysicalDevice();
 	if (physicalDevice == VK_NULL_HANDLE) {
-		errorCallback("Error finding physical device.");
+		errorCallback("Error selecting physical device.");
 		return false;
 	}
 
-	if (!findGraphicsQueue()) {
-		errorCallback("Error finding graphics queue.");
+	if (!selectGraphicsQueue()) {
+		errorCallback("Error selecting graphics queue.");
 		return false;
 	}
 
@@ -148,15 +148,15 @@ bool Renderer::createSurface()
 	return true;
 }
 
-VkPhysicalDevice Renderer::findPhysicalDevice()
+VkPhysicalDevice Renderer::selectPhysicalDevice()
 {
-	errorCallback("Physical device finding not implemented.");
+	errorCallback("Physical device selection not implemented.");
 	return VK_NULL_HANDLE;
 }
 
-bool Renderer::findGraphicsQueue()
+bool Renderer::selectGraphicsQueue()
 {
-	errorCallback("Graphics queue finding not implemented.");
+	errorCallback("Graphics queue selection not implemented.");
 	return false;
 }
 
