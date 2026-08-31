@@ -3,13 +3,14 @@
 #define VK_NO_PROTOTYPES
 #include <SDL3/SDL.h>
 #include <cstdint>
+#include <functional>
 #include <shaderc/shaderc.hpp>
 #include <string>
 #include <vulkan/vulkan.h>
 
 class Renderer {
   public:
-	bool initialize(SDL_Window *window, std::string &outMessage);
+	bool initialize(SDL_Window *window, std::function<void(const std::string &)> showError);
 	void render();
 	void shutdown();
 
@@ -23,6 +24,8 @@ class Renderer {
 		VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
 		void *pUserData);
 
+	std::function<void(const std::string &)> errorCallback;
+
 	VkInstance vulkanInstance{VK_NULL_HANDLE};
 	VkPhysicalDevice physicalDevice{VK_NULL_HANDLE};
 	VkDevice device{VK_NULL_HANDLE};
@@ -30,6 +33,9 @@ class Renderer {
 
 	uint32_t graphicsQueueFamilyIndex{UINT32_MAX};
 	VkQueue graphicsQueue{VK_NULL_HANDLE};
+
+	VkPipelineLayout pipelineLayout{VK_NULL_HANDLE};
+	VkPipeline pipeline{VK_NULL_HANDLE};
 
 	bool createVulkanInstance();
 	bool createSurface();

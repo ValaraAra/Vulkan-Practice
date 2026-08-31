@@ -17,25 +17,82 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Renderer::debugCallback(VkDebugUtilsMessageSeveri
 	return VK_FALSE;
 }
 
-bool Renderer::initialize(SDL_Window *window, std::string &outMessage)
+bool Renderer::initialize(SDL_Window *window, std::function<void(const std::string &)> showError)
 {
-	// Initialize Volk (Vulkan function loader)
+	errorCallback = showError;
+
 	if (volkInitialize() != VK_SUCCESS) {
-		outMessage = "Error initializing Volk.";
+		errorCallback("Error initializing Volk.");
 		return false;
 	}
 
-	// Create Vulkan instance
 	if (!createVulkanInstance()) {
-		outMessage = "Error creating Vulkan instance.";
+		errorCallback("Error creating Vulkan instance.");
 		return false;
 	}
 
-	// Load Vulkan functions for the new instance
 	volkLoadInstance(vulkanInstance);
 
-	outMessage = "Not implemented.";
-	return false;
+	if (!createSurface()) {
+		errorCallback("Error creating vulkan window surface.");
+		return false;
+	}
+
+	physicalDevice = findPhysicalDevice();
+	if (physicalDevice == VK_NULL_HANDLE) {
+		errorCallback("Error finding physical device.");
+		return false;
+	}
+
+	if (!findGraphicsQueue()) {
+		errorCallback("Error finding graphics queue.");
+		return false;
+	}
+
+	if (!createDevice(physicalDevice)) {
+		errorCallback("Error creating logical device.");
+		return false;
+	}
+
+	if (!initializeVMA()) {
+		errorCallback("Error initializing VMA.");
+		return false;
+	}
+
+	int width, height;
+	SDL_GetWindowSize(window, &width, &height);
+	if (width == NULL || height == NULL) {
+		errorCallback("Error getting window size.");
+		return false;
+	}
+
+	if (!createSwapchain(width, height)) {
+		errorCallback("Error creating swapchain.");
+		return false;
+	}
+
+	if (!createShaders()) {
+		errorCallback("Error creating shaders.");
+		return false;
+	}
+
+	pipeline = createGraphicsPipeline();
+	if (pipeline == VK_NULL_HANDLE) {
+		errorCallback("Error creating graphics pipeline.");
+		return false;
+	}
+
+	if (!createSyncResources()) {
+		errorCallback("Error creating synchronization resources.");
+		return false;
+	}
+
+	if (!createCommandBuffers()) {
+		errorCallback("Error creating command buffers.");
+		return false;
+	}
+
+	return true;
 }
 
 void Renderer::render() {}
@@ -85,29 +142,70 @@ bool Renderer::createVulkanInstance()
 	return vkCreateInstance(&instanceCreateInfo, nullptr, &vulkanInstance) == VK_SUCCESS;
 }
 
-bool Renderer::createSurface() { return false; }
+bool Renderer::createSurface()
+{
+	errorCallback("Surface creation not implemented.");
+	return false;
+}
 
-VkPhysicalDevice Renderer::findPhysicalDevice() { return VK_NULL_HANDLE; }
+VkPhysicalDevice Renderer::findPhysicalDevice()
+{
+	errorCallback("Physical device finding not implemented.");
+	return VK_NULL_HANDLE;
+}
 
-bool Renderer::findGraphicsQueue() { return false; }
+bool Renderer::findGraphicsQueue()
+{
+	errorCallback("Graphics queue finding not implemented.");
+	return false;
+}
 
-bool Renderer::createDevice(VkPhysicalDevice physicalDevice) { return false; }
+bool Renderer::createDevice(VkPhysicalDevice physicalDevice)
+{
+	errorCallback("Device creation not implemented.");
+	return false;
+}
 
-bool Renderer::initializeVMA() { return false; }
+bool Renderer::initializeVMA()
+{
+	errorCallback("VMA initialization not implemented.");
+	return false;
+}
 
-bool Renderer::createSwapchain(uint32_t width, uint32_t height) { return false; }
+bool Renderer::createSwapchain(uint32_t width, uint32_t height)
+{
+	errorCallback("Swapchain creation not implemented.");
+	return false;
+}
 
 void Renderer::destroySwapchain() {}
 
 VkShaderModule Renderer::createShaderModule(const std::string &filename, shaderc_shader_kind kind) const
 {
+	errorCallback("Shader module creation not implemented.");
 	return VK_NULL_HANDLE;
 }
 
-bool Renderer::createShaders() { return false; }
+bool Renderer::createShaders()
+{
+	errorCallback("Shader creation not implemented.");
+	return false;
+}
 
-VkPipeline Renderer::createGraphicsPipeline() { return VK_NULL_HANDLE; }
+VkPipeline Renderer::createGraphicsPipeline()
+{
+	errorCallback("Graphics pipeline creation not implemented.");
+	return VK_NULL_HANDLE;
+}
 
-bool Renderer::createSyncResources() { return false; }
+bool Renderer::createSyncResources()
+{
+	errorCallback("Sync resources creation not implemented.");
+	return false;
+}
 
-bool Renderer::createCommandBuffers() { return false; }
+bool Renderer::createCommandBuffers()
+{
+	errorCallback("Command buffers creation not implemented.");
+	return false;
+}

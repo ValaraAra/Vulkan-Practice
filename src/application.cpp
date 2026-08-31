@@ -23,9 +23,7 @@ bool Application::initialize()
 	}
 
 	// Renderer initialization
-	std::string rendererMessage;
-	if (!renderer.initialize(window, rendererMessage)) {
-		showError("Renderer - Initialization failed!\n\n" + rendererMessage);
+	if (!renderer.initialize(window, [this](const std::string &errorMessage) { showError("Renderer - " + errorMessage); })) {
 		return false;
 	}
 
