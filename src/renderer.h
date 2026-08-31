@@ -1,4 +1,7 @@
 #pragma once
+
+#define VK_NO_PROTOTYPES
+#include <SDL3/SDL.h>
 #include <cstdint>
 #include <shaderc/shaderc.hpp>
 #include <string>
@@ -6,11 +9,28 @@
 
 class Renderer {
   public:
-	bool initialize(uint32_t width, uint32_t height, std::string &outMessage);
+	bool initialize(SDL_Window *window, std::string &outMessage);
 	void render();
 	void shutdown();
 
   private:
+	constexpr static uint32_t VulkanAPIVersion{VK_API_VERSION_1_4};
+	constexpr static uint32_t MaxFramesInFlight{2};
+	constexpr static VkFormat swapchainFormat{VK_FORMAT_B8G8R8A8_SRGB};
+	constexpr static VkFormat depthFormat{VK_FORMAT_D32_SFLOAT};
+
+	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+		VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+		void *pUserData);
+
+	VkInstance vulkanInstance{VK_NULL_HANDLE};
+	VkPhysicalDevice physicalDevice{VK_NULL_HANDLE};
+	VkDevice device{VK_NULL_HANDLE};
+	VkSurfaceKHR surface{VK_NULL_HANDLE};
+
+	uint32_t graphicsQueueFamilyIndex{UINT32_MAX};
+	VkQueue graphicsQueue{VK_NULL_HANDLE};
+
 	bool createVulkanInstance();
 	bool createSurface();
 	VkPhysicalDevice findPhysicalDevice();

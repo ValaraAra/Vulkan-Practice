@@ -1,11 +1,14 @@
 #include "application.h"
 #include <SDL3/SDL.h>
 
-void Application::showError(const std::string &errorMessage) {
+// SDL error message box
+void Application::showError(const std::string &errorMessage)
+{
 	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", errorMessage.c_str(), window);
 }
 
-bool Application::initialize() {
+bool Application::initialize()
+{
 	// SDL initialization
 	if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
 		showError("SDL - Initialization failed! " + std::string(SDL_GetError()));
@@ -21,15 +24,16 @@ bool Application::initialize() {
 
 	// Renderer initialization
 	std::string rendererMessage;
-	if (!renderer.initialize(width, height, rendererMessage)) {
-		showError("Renderer - Initialization failed: " + rendererMessage);
+	if (!renderer.initialize(window, rendererMessage)) {
+		showError("Renderer - Initialization failed!\n\n" + rendererMessage);
 		return false;
 	}
 
 	return true;
 }
 
-void Application::run() {
+void Application::run()
+{
 	running = true;
 
 	while (running) {
@@ -53,7 +57,10 @@ void Application::run() {
 	}
 }
 
-void Application::shutdown() {
+void Application::shutdown()
+{
+	renderer.shutdown();
+
 	if (window) {
 		SDL_DestroyWindow(window);
 	}
