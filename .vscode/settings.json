@@ -21,6 +21,9 @@
 	"editor.insertSpaces": false,
 	"editor.tabSize": 4,
 	"editor.detectIndentation": false,
-	"editor.rulers": [125],
+	"editor.rulers": [{
+		"column": 125,
+		"color": "#FFFFFF08"
+	}],
 	"editor.wordWrapColumn": 125
 }
