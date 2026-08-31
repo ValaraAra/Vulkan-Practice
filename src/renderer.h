@@ -10,7 +10,7 @@
 
 class Renderer {
   public:
-	bool initialize(SDL_Window *window, std::function<void(const std::string &)> showError);
+	bool initialize(SDL_Window *window, std::function<void(const std::string &)> errorCallback);
 	void render();
 	void shutdown();
 
@@ -24,6 +24,7 @@ class Renderer {
 		VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
 		void *pUserData);
 
+	SDL_Window *window{nullptr};
 	std::function<void(const std::string &)> errorCallback;
 
 	VkInstance vulkanInstance{VK_NULL_HANDLE};

@@ -17,9 +17,10 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Renderer::debugCallback(VkDebugUtilsMessageSeveri
 	return VK_FALSE;
 }
 
-bool Renderer::initialize(SDL_Window *window, std::function<void(const std::string &)> showError)
+bool Renderer::initialize(SDL_Window *window, std::function<void(const std::string &)> errorCallback)
 {
-	errorCallback = showError;
+	this->window = window;
+	this->errorCallback = errorCallback;
 
 	if (volkInitialize() != VK_SUCCESS) {
 		errorCallback("Error initializing Volk.");
@@ -140,8 +141,11 @@ bool Renderer::createVulkanInstance()
 
 bool Renderer::createSurface()
 {
-	errorCallback("Surface creation not implemented.");
-	return false;
+	if (!SDL_Vulkan_CreateSurface(window, vulkanInstance, nullptr, &surface)) {
+		errorCallback("Vulkan surface creation failed!\n\n" + std::string(SDL_GetError()));
+		return false;
+	}
+	return true;
 }
 
 VkPhysicalDevice Renderer::findPhysicalDevice()
