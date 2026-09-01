@@ -25,5 +25,8 @@
 		"column": 125,
 		"color": "#FFFFFF08"
 	}],
-	"editor.wordWrapColumn": 125
+	"editor.wordWrapColumn": 125,
+
+	// Theme
+	"workbench.colorTheme": "Dark 2026",
 }
