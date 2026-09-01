@@ -238,8 +238,88 @@ bool Renderer::selectGraphicsQueue()
 
 bool Renderer::createDevice(VkPhysicalDevice physicalDevice)
 {
-	errorCallback("Device creation not implemented.");
-	return false;
+	// Get supported features
+	VkPhysicalDeviceVulkan14Features supportedFeatures14{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES, .pNext = nullptr
+	};
+	VkPhysicalDeviceVulkan13Features supportedFeatures13{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, .pNext = &supportedFeatures14
+	};
+	VkPhysicalDeviceVulkan12Features supportedFeatures12{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, .pNext = &supportedFeatures13
+	};
+	VkPhysicalDeviceFeatures2 supportedFeatures{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, .pNext = &supportedFeatures12
+	};
+	vkGetPhysicalDeviceFeatures2(physicalDevice, &supportedFeatures);
+
+	// Check for required features
+	if (!supportedFeatures13.dynamicRendering || !supportedFeatures13.synchronization2
+		|| !supportedFeatures12.timelineSemaphore)
+	{
+		errorCallback("Physical device does not support required features.");
+		return false;
+	}
+
+	// Enable required features
+	VkPhysicalDeviceVulkan14Features enabledFeatures14{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
+		.pNext = nullptr,
+	};
+	VkPhysicalDeviceVulkan13Features enabledFeatures13{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+		.pNext = &enabledFeatures14,
+		.synchronization2 = VK_TRUE,
+		.dynamicRendering = VK_TRUE,
+	};
+	VkPhysicalDeviceVulkan12Features enabledFeatures12{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+		.pNext = &enabledFeatures13,
+		.timelineSemaphore = VK_TRUE,
+	};
+	VkPhysicalDeviceFeatures2 enabledFeatures{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+		.pNext = &enabledFeatures12,
+	};
+
+	// Request queues
+	std::vector<float> queuePriorities{1.0f};
+	VkDeviceQueueCreateInfo graphicsQueueInfo{
+		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+		.queueFamilyIndex = graphicsQueueFamilyIndex,
+		.queueCount = 1,
+		.pQueuePriorities = queuePriorities.data(),
+	};
+
+	// Device extensions
+	const std::vector<const char*> deviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+
+	// Create logical device
+	VkDeviceCreateInfo deviceCreateInfo{
+		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+		.pNext = &enabledFeatures,
+		.queueCreateInfoCount = 1,
+		.pQueueCreateInfos = &graphicsQueueInfo,
+		.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size()),
+		.ppEnabledExtensionNames = deviceExtensions.data(),
+		.pEnabledFeatures = nullptr,
+	};
+
+	if (vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device) != VK_SUCCESS)
+	{
+		errorCallback("Failed to create logical device.");
+		return false;
+	}
+
+	// Get the graphics queue
+	vkGetDeviceQueue(device, graphicsQueueFamilyIndex, 0, &graphicsQueue);
+	if (!graphicsQueue)
+	{
+		errorCallback("Failed to get graphics queue.");
+		return false;
+	}
+
+	return true;
 }
 
 bool Renderer::initializeVMA()
