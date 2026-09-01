@@ -8,9 +8,10 @@
 #include <string>
 #include <vulkan/vulkan.h>
 
-class Renderer {
+class Renderer
+{
   public:
-	bool initialize(SDL_Window *window, std::function<void(const std::string &)> errorCallback);
+	bool initialize(SDL_Window* window, std::function<void(const std::string&)> errorCallback);
 	void render();
 	void shutdown();
 
@@ -20,12 +21,15 @@ class Renderer {
 	constexpr static VkFormat swapchainFormat{VK_FORMAT_B8G8R8A8_SRGB};
 	constexpr static VkFormat depthFormat{VK_FORMAT_D32_SFLOAT};
 
-	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-		VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-		void *pUserData);
+	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
+		VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+		VkDebugUtilsMessageTypeFlagsEXT messageType,
+		const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+		void* pUserData
+	);
 
-	SDL_Window *window{nullptr};
-	std::function<void(const std::string &)> errorCallback;
+	SDL_Window* window{nullptr};
+	std::function<void(const std::string&)> errorCallback;
 
 	VkInstance vulkanInstance{VK_NULL_HANDLE};
 	VkPhysicalDevice physicalDevice{VK_NULL_HANDLE};
@@ -46,7 +50,7 @@ class Renderer {
 	bool initializeVMA();
 	bool createSwapchain(uint32_t width, uint32_t height);
 	void destroySwapchain();
-	VkShaderModule createShaderModule(const std::string &filename, shaderc_shader_kind kind) const;
+	VkShaderModule createShaderModule(const std::string& filename, shaderc_shader_kind kind) const;
 	bool createShaders();
 	VkPipeline createGraphicsPipeline();
 	bool createSyncResources();

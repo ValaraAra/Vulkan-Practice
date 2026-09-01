@@ -1,17 +1,19 @@
 #pragma once
 #include "renderer.h"
+
 #include <cstdint>
 
 struct SDL_Window;
 
-class Application {
+class Application
+{
   public:
 	bool initialize();
 	void run();
 	void shutdown();
 
   private:
-	SDL_Window *window = nullptr;
+	SDL_Window* window = nullptr;
 	Renderer renderer;
 
 	static const int DEFAULT_WIDTH = 1280;
@@ -22,5 +24,5 @@ class Application {
 
 	bool running = false;
 
-	void showError(const std::string &errorMessage);
+	void showError(const std::string& errorMessage);
 };
