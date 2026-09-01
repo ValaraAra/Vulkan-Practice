@@ -324,8 +324,25 @@ bool Renderer::createDevice(VkPhysicalDevice physicalDevice)
 
 bool Renderer::initializeVMA()
 {
-	errorCallback("VMA initialization not implemented.");
-	return false;
+	VmaVulkanFunctions vmaFunctionInfo{};
+	VmaAllocatorCreateInfo vmaAllocatorInfo{
+		.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
+		.physicalDevice = physicalDevice,
+		.device = device,
+		.pVulkanFunctions = &vmaFunctionInfo,
+		.instance = vulkanInstance,
+		.vulkanApiVersion = VulkanAPIVersion
+	};
+
+	vmaImportVulkanFunctionsFromVolk(&vmaAllocatorInfo, &vmaFunctionInfo);
+
+	if (vmaCreateAllocator(&vmaAllocatorInfo, &vmaAllocator) != VK_SUCCESS)
+	{
+		errorCallback("Failed to create VMA allocator.");
+		return false;
+	}
+
+	return true;
 }
 
 bool Renderer::createSwapchain(uint32_t width, uint32_t height)

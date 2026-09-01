@@ -8,6 +8,11 @@
 #include <string>
 #include <vulkan/vulkan.h>
 
+struct VmaAllocator_T;
+typedef struct VmaAllocator_T* VmaAllocator;
+struct VmaAllocation_T;
+typedef struct VmaAllocation_T* VmaAllocation;
+
 class Renderer
 {
   public:
@@ -35,6 +40,7 @@ class Renderer
 	VkPhysicalDevice physicalDevice{VK_NULL_HANDLE};
 	VkDevice device{VK_NULL_HANDLE};
 	VkSurfaceKHR surface{VK_NULL_HANDLE};
+	VmaAllocator vmaAllocator{VK_NULL_HANDLE};
 
 	uint32_t graphicsQueueFamilyIndex{UINT32_MAX};
 	VkQueue graphicsQueue{VK_NULL_HANDLE};
