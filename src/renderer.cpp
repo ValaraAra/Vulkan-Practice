@@ -387,6 +387,24 @@ void Renderer::render() {}
 
 void Renderer::shutdown()
 {
+	if (vmaAllocator)
+	{
+		vmaDestroyAllocator(vmaAllocator);
+		vmaAllocator = VK_NULL_HANDLE;
+	}
+
+	if (surface)
+	{
+		vkDestroySurfaceKHR(vulkanInstance, surface, nullptr);
+		surface = VK_NULL_HANDLE;
+	}
+
+	if (device)
+	{
+		vkDestroyDevice(device, nullptr);
+		device = VK_NULL_HANDLE;
+	}
+
 	if (vulkanInstance)
 	{
 		vkDestroyInstance(vulkanInstance, nullptr);
