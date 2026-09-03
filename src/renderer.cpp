@@ -539,7 +539,7 @@ void Renderer::destroySwapchain()
 VkShaderModule Renderer::createShaderModule(const std::string& filename, shaderc_shader_kind kind) const
 {
 	// Read shader source from file
-	std::string shaderPath = "src/shaders/" + filename;
+	std::string shaderPath = "shaders/" + filename;
 	std::string shaderSource = readTextFile(shaderPath);
 
 	if (shaderSource.empty())
@@ -588,8 +588,15 @@ VkShaderModule Renderer::createShaderModule(const std::string& filename, shaderc
 
 bool Renderer::createShaders()
 {
-	errorCallback("Shader creation not implemented.");
-	return false;
+	// Vertex shader
+	vertShader = createShaderModule("shader.vert", shaderc_vertex_shader);
+	if (vertShader == VK_NULL_HANDLE) { return false; }
+
+	// Fragment shader
+	fragShader = createShaderModule("shader.frag", shaderc_fragment_shader);
+	if (fragShader == VK_NULL_HANDLE) { return false; }
+
+	return true;
 }
 
 VkPipeline Renderer::createGraphicsPipeline()

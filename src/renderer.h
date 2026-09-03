@@ -61,6 +61,9 @@ class Renderer
 	VkPipelineLayout pipelineLayout{VK_NULL_HANDLE};
 	VkPipeline pipeline{VK_NULL_HANDLE};
 
+	VkShaderModule vertShader{VK_NULL_HANDLE};
+	VkShaderModule fragShader{VK_NULL_HANDLE};
+
 	bool createVulkanInstance();
 	bool createSurface();
 	VkPhysicalDevice selectPhysicalDevice();
