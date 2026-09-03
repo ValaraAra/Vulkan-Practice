@@ -8,8 +8,9 @@ IncludeBlocks: Regroup
 PointerAlignment: Left
 BinPackArguments: false
 BinPackParameters: false
-AllowShortBlocksOnASingleLine: Empty
+AllowShortBlocksOnASingleLine: Always
 AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: WithoutElse
 BreakTemplateDeclarations: Yes
 AlignAfterOpenBracket: BlockIndent
 BreakBeforeBinaryOperators: NonAssignment

@@ -1,9 +1,14 @@
 #include "renderer.h"
-#define VOLK_IMPLEMENTATION
-#include <Volk/volk.h>
-#define VMA_IMPLEMENTATION
+
+#include "utility.h"
+
 #include <SDL3/SDL_vulkan.h>
 #include <iostream>
+
+#define VOLK_IMPLEMENTATION
+#include <Volk/volk.h>
+
+#define VMA_IMPLEMENTATION
 #include <vma/vk_mem_alloc.h>
 
 // Debug callback for Vulkan validation layers
@@ -530,10 +535,55 @@ void Renderer::destroySwapchain()
 	}
 }
 
+// Create a shader module from a GLSL shader file using shaderc
 VkShaderModule Renderer::createShaderModule(const std::string& filename, shaderc_shader_kind kind) const
 {
-	errorCallback("Shader module creation not implemented.");
-	return VK_NULL_HANDLE;
+	// Read shader source from file
+	std::string shaderPath = "src/shaders/" + filename;
+	std::string shaderSource = readTextFile(shaderPath);
+
+	if (shaderSource.empty())
+	{
+		errorCallback("Failed to read shader source for \"" + filename + "\".");
+		return VK_NULL_HANDLE;
+	}
+
+	// Compile shader source to SPIR-V using shaderc
+	std::cout << "Compiling shader: " << shaderPath << std::endl;
+
+	shaderc::Compiler compiler;
+	shaderc::CompileOptions options;
+
+	options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_4);
+	options.SetTargetSpirv(shaderc_spirv_version_1_6);
+	options.SetOptimizationLevel(shaderc_optimization_level_performance);
+
+	shaderc::CompilationResult result = compiler.CompileGlslToSpv(shaderSource, kind, filename.c_str(), options);
+
+	if (result.GetCompilationStatus() != shaderc_compilation_status_success)
+	{
+		std::cerr << "Shader compilation failed for \"" << filename << "\": " << result.GetErrorMessage() << std::endl;
+		errorCallback("Failed to compile shader: " + filename + ".\n\n" + result.GetErrorMessage());
+		return VK_NULL_HANDLE;
+	}
+
+	// Create shader module from SPIR-V
+	const size_t spirvSize = (result.cend() - result.cbegin()) * sizeof(uint32_t);
+
+	VkShaderModuleCreateInfo shaderModuleInfo{
+		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+		.codeSize = spirvSize,
+		.pCode = result.cbegin(),
+	};
+
+	VkShaderModule shaderModule = VK_NULL_HANDLE;
+	if (vkCreateShaderModule(device, &shaderModuleInfo, nullptr, &shaderModule) != VK_SUCCESS)
+	{
+		errorCallback("Failed to create shader module for \"" + filename + "\".");
+		return VK_NULL_HANDLE;
+	}
+
+	return shaderModule;
 }
 
 bool Renderer::createShaders()

@@ -15,6 +15,8 @@ add_executable(vulkanapp
 	"src/application.cpp"
 	"src/renderer.h"
 	"src/renderer.cpp"
+	"src/utility.h"
+	"src/utility.cpp"
 )
 
 if (MSVC)
