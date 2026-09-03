@@ -202,9 +202,33 @@ VkPhysicalDevice Renderer::selectPhysicalDevice()
 		}
 	}
 
+	// Print selected device name
 	VkPhysicalDeviceProperties props{};
 	vkGetPhysicalDeviceProperties(physicalDevice, &props);
 	std::cout << "Selected physical device: " << props.deviceName << std::endl;
+
+	// Ensure the requested swapchain format is supported
+	uint32_t formatCount = 0;
+	vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, nullptr);
+
+	std::vector<VkSurfaceFormatKHR> surfaceFormats(formatCount);
+	vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, surfaceFormats.data());
+
+	bool formatSupported = false;
+	for (const VkSurfaceFormatKHR& surfaceFormat : surfaceFormats)
+	{
+		if (surfaceFormat.format == swapchainFormat)
+		{
+			formatSupported = true;
+			break;
+		}
+	}
+
+	if (!formatSupported)
+	{
+		errorCallback("Requested swapchain format not supported by the selected physical device and surface combination.");
+		return VK_NULL_HANDLE;
+	}
 
 	return physicalDevice;
 }
@@ -347,11 +371,164 @@ bool Renderer::initializeVMA()
 
 bool Renderer::createSwapchain(uint32_t width, uint32_t height)
 {
-	errorCallback("Swapchain creation not implemented.");
-	return false;
+	swapchainWidth = width;
+	swapchainHeight = height;
+
+	// Get surface capabilities
+	VkSurfaceCapabilitiesKHR surfaceCapabilities{};
+	if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities) != VK_SUCCESS)
+	{
+		errorCallback("Failed to get surface capabilities.");
+		return false;
+	}
+
+	// Determine the number of images in the swapchain
+	uint32_t requestedImageCount = std::max(2u, surfaceCapabilities.minImageCount);
+	if (surfaceCapabilities.maxImageCount > 0)
+	{
+		requestedImageCount = std::min(requestedImageCount, surfaceCapabilities.maxImageCount);
+	}
+
+	// Create swapchain
+	VkSwapchainCreateInfoKHR swapchainCreateInfo{
+		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+		.surface = surface,
+		.minImageCount = requestedImageCount,
+		.imageFormat = swapchainFormat,
+		.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+		.imageExtent{.width = swapchainWidth, .height = swapchainHeight},
+		.imageArrayLayers = 1,
+		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+		.preTransform = surfaceCapabilities.currentTransform,
+		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+		.presentMode = VK_PRESENT_MODE_FIFO_KHR
+	};
+
+	if (vkCreateSwapchainKHR(device, &swapchainCreateInfo, nullptr, &swapchain) != VK_SUCCESS)
+	{
+		errorCallback("Failed to create swapchain.");
+		return false;
+	}
+
+	// Get the swapchain images
+	uint32_t swapchainImageCount = 0;
+	vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, nullptr);
+	swapchainImages.resize(swapchainImageCount);
+	vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, swapchainImages.data());
+	swapchainImageViews.resize(swapchainImageCount);
+
+	// Create image view into each swapchain image
+	for (size_t i = 0; i < swapchainImages.size(); ++i)
+	{
+		VkImageViewCreateInfo imageViewInfo{
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.image = swapchainImages[i],
+			.viewType = VK_IMAGE_VIEW_TYPE_2D,
+			.format = swapchainFormat,
+			.subresourceRange{
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			}
+		};
+
+		if (vkCreateImageView(device, &imageViewInfo, nullptr, &swapchainImageViews[i]) != VK_SUCCESS)
+		{
+			errorCallback(std::format("Failed to create image view for swapchain image {}.", i));
+			return false;
+		}
+	}
+
+	// Create semaphore for each swapchain image
+	renderCompleteSemaphores.resize(swapchainImages.size());
+	for (size_t i = 0; i < renderCompleteSemaphores.size(); ++i)
+	{
+		VkSemaphoreCreateInfo semaphoreInfo{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+
+		if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderCompleteSemaphores[i]) != VK_SUCCESS)
+		{
+			errorCallback(std::format("Failed to create render-complete semaphore for swapchain image {}.", i));
+			return false;
+		}
+	}
+
+	// Create swapchain depth image
+	VkImageCreateInfo depthImageInfo{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.format = depthFormat,
+		.extent{.width = swapchainWidth, .height = swapchainHeight, .depth = 1},
+		.mipLevels = 1,
+		.arrayLayers = 1,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+	};
+
+	VmaAllocationCreateInfo depthAllocationInfo{
+		.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+		.usage = VMA_MEMORY_USAGE_AUTO,
+	};
+
+	if (vmaCreateImage(vmaAllocator, &depthImageInfo, &depthAllocationInfo, &depthImage, &depthImageAllocation, nullptr)
+		!= VK_SUCCESS)
+	{
+		errorCallback("Failed to create depth image.");
+		return false;
+	}
+
+	// Create image view for depth image
+	VkImageViewCreateInfo depthImageViewInfo{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		.image = depthImage,
+		.viewType = VK_IMAGE_VIEW_TYPE_2D,
+		.format = depthFormat,
+		.subresourceRange{
+			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1
+		}
+	};
+
+	if (vkCreateImageView(device, &depthImageViewInfo, nullptr, &depthImageView) != VK_SUCCESS)
+	{
+		errorCallback("Failed to create image view for depth image.");
+		return false;
+	}
+
+	return true;
 }
 
-void Renderer::destroySwapchain() {}
+void Renderer::destroySwapchain()
+{
+	for (VkImageView imageView : swapchainImageViews)
+	{
+		vkDestroyImageView(device, imageView, nullptr);
+	}
+
+	for (VkSemaphore& semaphore : renderCompleteSemaphores)
+	{
+		vkDestroySemaphore(device, semaphore, nullptr);
+	}
+
+	if (swapchain != VK_NULL_HANDLE)
+	{
+		vkDestroySwapchainKHR(device, swapchain, nullptr);
+		swapchain = VK_NULL_HANDLE;
+	}
+
+	if (depthImageView != VK_NULL_HANDLE)
+	{
+		vkDestroyImageView(device, depthImageView, nullptr);
+		depthImageView = VK_NULL_HANDLE;
+	}
+	if (depthImage != VK_NULL_HANDLE)
+	{
+		vmaDestroyImage(vmaAllocator, depthImage, depthImageAllocation);
+		depthImage = VK_NULL_HANDLE;
+	}
+}
 
 VkShaderModule Renderer::createShaderModule(const std::string& filename, shaderc_shader_kind kind) const
 {

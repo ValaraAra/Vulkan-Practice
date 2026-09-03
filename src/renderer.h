@@ -1,5 +1,6 @@
 #pragma once
 
+#include <vector>
 #define VK_NO_PROTOTYPES
 #include <SDL3/SDL.h>
 #include <cstdint>
@@ -44,6 +45,18 @@ class Renderer
 
 	uint32_t graphicsQueueFamilyIndex{UINT32_MAX};
 	VkQueue graphicsQueue{VK_NULL_HANDLE};
+
+	VkSwapchainKHR swapchain{VK_NULL_HANDLE};
+	std::vector<VkImage> swapchainImages;
+	std::vector<VkImageView> swapchainImageViews;
+	std::vector<VkSemaphore> renderCompleteSemaphores;
+	bool requireSwapchainRecreation{false};
+	uint32_t swapchainWidth{0};
+	uint32_t swapchainHeight{0};
+
+	VkImage depthImage{VK_NULL_HANDLE};
+	VkImageView depthImageView{VK_NULL_HANDLE};
+	VmaAllocation depthImageAllocation{VK_NULL_HANDLE};
 
 	VkPipelineLayout pipelineLayout{VK_NULL_HANDLE};
 	VkPipeline pipeline{VK_NULL_HANDLE};
