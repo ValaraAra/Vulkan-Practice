@@ -4,6 +4,7 @@
 
 #include <SDL3/SDL_vulkan.h>
 #include <iostream>
+#include <vector>
 
 #define VOLK_IMPLEMENTATION
 #include <Volk/volk.h>
@@ -601,8 +602,136 @@ bool Renderer::createShaders()
 
 VkPipeline Renderer::createGraphicsPipeline()
 {
-	errorCallback("Graphics pipeline creation not implemented.");
-	return VK_NULL_HANDLE;
+	// Create pipeline layout
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		.setLayoutCount = 0,
+		.pushConstantRangeCount = 0,
+	};
+
+	if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
+	{
+		errorCallback("Failed to create pipeline layout.");
+		return VK_NULL_HANDLE;
+	}
+
+	// Shader stages
+	const char* entryPoint = "main";
+	std::vector<VkPipelineShaderStageCreateInfo> shaderStages{
+		{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_VERTEX_BIT,
+			.module = vertShader,
+			.pName = entryPoint,
+		},
+		{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+			.module = fragShader,
+			.pName = entryPoint,
+		}
+	};
+
+	// Vertex input state (vertex pulling)
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+	};
+
+	// Input assembly state
+	VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+	};
+
+	// Depth stencil state
+	VkPipelineDepthStencilStateCreateInfo depthStencilInfo{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		.depthTestEnable = VK_TRUE,
+		.depthWriteEnable = VK_TRUE,
+		.depthCompareOp = VK_COMPARE_OP_LESS,
+		.stencilTestEnable = VK_FALSE,
+	};
+
+	// Viewport & scissor state (dynamic)
+	VkPipelineViewportStateCreateInfo viewportInfo{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+		.viewportCount = 1,
+		.pViewports = nullptr,
+		.scissorCount = 1,
+		.pScissors = nullptr,
+	};
+
+	// Rasterization state
+	VkPipelineRasterizationStateCreateInfo rasterizationInfo{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+		.polygonMode = VK_POLYGON_MODE_FILL,
+		.cullMode = VK_CULL_MODE_BACK_BIT,
+		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+		.lineWidth = 1.0f,
+	};
+
+	// Multisample state (none)
+	VkPipelineMultisampleStateCreateInfo multisampleInfo{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+	};
+
+	// Color blend state (alpha-blending disabled)
+	VkPipelineColorBlendAttachmentState colorBlendAttachment{
+		.blendEnable = VK_FALSE,
+		.colorWriteMask =
+			VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+	};
+	VkPipelineColorBlendStateCreateInfo colorBlendInfo{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+		.attachmentCount = 1,
+		.pAttachments = &colorBlendAttachment,
+	};
+
+	// Dynamic state (viewport & scissor)
+	std::vector<VkDynamicState> dynamicStates{
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR,
+	};
+	VkPipelineDynamicStateCreateInfo dynamicStateInfo{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+		.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+		.pDynamicStates = dynamicStates.data(),
+	};
+
+	// Dynamic rendering info
+	VkPipelineRenderingCreateInfo renderingInfo{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+		.colorAttachmentCount = 1,
+		.pColorAttachmentFormats = &swapchainFormat,
+		.depthAttachmentFormat = depthFormat,
+	};
+
+	// Finally, create the graphics pipeline
+	VkGraphicsPipelineCreateInfo pipelineInfo{
+		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.pNext = &renderingInfo,
+		.stageCount = static_cast<uint32_t>(shaderStages.size()),
+		.pStages = shaderStages.data(),
+		.pVertexInputState = &vertexInputInfo,
+		.pInputAssemblyState = &inputAssemblyInfo,
+		.pViewportState = &viewportInfo,
+		.pRasterizationState = &rasterizationInfo,
+		.pMultisampleState = &multisampleInfo,
+		.pDepthStencilState = &depthStencilInfo,
+		.pColorBlendState = &colorBlendInfo,
+		.pDynamicState = &dynamicStateInfo,
+		.layout = pipelineLayout,
+		.renderPass = VK_NULL_HANDLE,
+	};
+
+	if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS)
+	{
+		errorCallback("Failed to create graphics pipeline.");
+		return VK_NULL_HANDLE;
+	}
+
+	return pipeline;
 }
 
 bool Renderer::createSyncResources()
@@ -621,6 +750,18 @@ void Renderer::render() {}
 
 void Renderer::shutdown()
 {
+	// Pipeline
+	if (pipelineLayout != VK_NULL_HANDLE)
+	{
+		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+		pipelineLayout = VK_NULL_HANDLE;
+	}
+	if (pipeline != VK_NULL_HANDLE)
+	{
+		vkDestroyPipeline(device, pipeline, nullptr);
+		pipeline = VK_NULL_HANDLE;
+	}
+
 	// Shaders
 	if (vertShader != VK_NULL_HANDLE)
 	{
