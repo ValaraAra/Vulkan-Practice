@@ -3,6 +3,7 @@
 #include <vector>
 #define VK_NO_PROTOTYPES
 #include <SDL3/SDL.h>
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <shaderc/shaderc.hpp>
@@ -13,6 +14,13 @@ struct VmaAllocator_T;
 typedef struct VmaAllocator_T* VmaAllocator;
 struct VmaAllocation_T;
 typedef struct VmaAllocation_T* VmaAllocation;
+
+struct FrameResources
+{
+	VkCommandPool commandPool{VK_NULL_HANDLE};
+	VkCommandBuffer commandBuffer{VK_NULL_HANDLE};
+	VkSemaphore imageAcquiredSemaphore{VK_NULL_HANDLE};
+};
 
 class Renderer
 {
@@ -63,6 +71,9 @@ class Renderer
 
 	VkShaderModule vertShader{VK_NULL_HANDLE};
 	VkShaderModule fragShader{VK_NULL_HANDLE};
+
+	VkSemaphore timelineSemaphore{VK_NULL_HANDLE};
+	std::array<FrameResources, MaxFramesInFlight> frameResources;
 
 	bool createVulkanInstance();
 	bool createSurface();

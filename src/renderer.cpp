@@ -736,20 +736,100 @@ VkPipeline Renderer::createGraphicsPipeline()
 
 bool Renderer::createSyncResources()
 {
-	errorCallback("Sync resources creation not implemented.");
-	return false;
+	// Create timeline semaphore
+	VkSemaphoreTypeCreateInfo timelineSemaphoreInfo{
+		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+		.initialValue = MaxFramesInFlight,
+	};
+	VkSemaphoreCreateInfo semaphoreInfo{
+		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+		.pNext = &timelineSemaphoreInfo,
+	};
+	if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &timelineSemaphore) != VK_SUCCESS)
+	{
+		errorCallback("Failed to create timeline semaphore.");
+		return false;
+	}
+
+	// Per-frame binary semaphore for image acquisition
+	for (FrameResources& frameResource : frameResources)
+	{
+		VkSemaphoreCreateInfo imageAcquiredSemaphoreInfo{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+		};
+		if (vkCreateSemaphore(device, &imageAcquiredSemaphoreInfo, nullptr, &frameResource.imageAcquiredSemaphore)
+			!= VK_SUCCESS)
+		{
+			errorCallback("Failed to create per-frame image-acquired semaphore.");
+			return false;
+		}
+	}
+
+	return true;
 }
 
 bool Renderer::createCommandBuffers()
 {
-	errorCallback("Command buffers creation not implemented.");
-	return false;
+	for (FrameResources& frameResource : frameResources)
+	{
+		// Create per-frame command pool
+		VkCommandPoolCreateInfo commandPoolInfo{
+			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+			.queueFamilyIndex = graphicsQueueFamilyIndex,
+		};
+		if (vkCreateCommandPool(device, &commandPoolInfo, nullptr, &frameResource.commandPool) != VK_SUCCESS)
+		{
+			errorCallback("Failed to create per-frame command pool.");
+			return false;
+		}
+
+		// Create per-frame command buffer
+		VkCommandBufferAllocateInfo commandBufferInfo{
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+			.commandPool = frameResource.commandPool,
+			.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+			.commandBufferCount = 1,
+		};
+		if (vkAllocateCommandBuffers(device, &commandBufferInfo, &frameResource.commandBuffer) != VK_SUCCESS)
+		{
+			errorCallback("Failed to allocate per-frame command buffer.");
+			return false;
+		}
+	}
+
+	return true;
 }
 
 void Renderer::render() {}
 
 void Renderer::shutdown()
 {
+	// Flush GPU first
+	vkDeviceWaitIdle(device);
+
+	// Frame/sync resources
+	if (timelineSemaphore)
+	{
+		vkDestroySemaphore(device, timelineSemaphore, nullptr);
+		timelineSemaphore = VK_NULL_HANDLE;
+	}
+	for (FrameResources& frameResource : frameResources)
+	{
+		if (frameResource.imageAcquiredSemaphore)
+		{
+			vkDestroySemaphore(device, frameResource.imageAcquiredSemaphore, nullptr);
+			frameResource.imageAcquiredSemaphore = VK_NULL_HANDLE;
+		}
+		// Destroying command pool implicity frees command buffers allocated from it
+		if (frameResource.commandPool)
+		{
+			vkDestroyCommandPool(device, frameResource.commandPool, nullptr);
+			frameResource.commandPool = VK_NULL_HANDLE;
+			frameResource.commandBuffer = VK_NULL_HANDLE;
+		}
+	}
+
 	// Pipeline
 	if (pipelineLayout != VK_NULL_HANDLE)
 	{
