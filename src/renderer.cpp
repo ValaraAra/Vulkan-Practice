@@ -246,7 +246,7 @@ bool Renderer::selectGraphicsQueue()
 	vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, &queueFamilyCount, nullptr);
 
 	// Get queue family properties
-	std::vector<VkQueueFamilyProperties2> queueFamilies(queueFamilyCount);
+	std::vector<VkQueueFamilyProperties2> queueFamilies(queueFamilyCount, {VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2});
 	vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, &queueFamilyCount, queueFamilies.data());
 
 	// Select one that supports both graphics and presentation
