@@ -621,6 +621,20 @@ void Renderer::render() {}
 
 void Renderer::shutdown()
 {
+	// Shaders
+	if (vertShader != VK_NULL_HANDLE)
+	{
+		vkDestroyShaderModule(device, vertShader, nullptr);
+		vertShader = VK_NULL_HANDLE;
+	}
+	if (fragShader != VK_NULL_HANDLE)
+	{
+		vkDestroyShaderModule(device, fragShader, nullptr);
+		fragShader = VK_NULL_HANDLE;
+	}
+
+	destroySwapchain();
+
 	if (vmaAllocator)
 	{
 		vmaDestroyAllocator(vmaAllocator);
