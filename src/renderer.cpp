@@ -801,7 +801,245 @@ bool Renderer::createCommandBuffers()
 	return true;
 }
 
-void Renderer::render() {}
+void Renderer::render()
+{
+	// First check swapchain validity
+	if (requireSwapchainRecreation)
+	{
+		vkDeviceWaitIdle(device);
+
+		destroySwapchain();
+
+		int width, height;
+		SDL_GetWindowSize(window, &width, &height);
+		createSwapchain(width, height);
+
+		requireSwapchainRecreation = false;
+	}
+
+	const uint32_t frameResourceIndex = frameIndex++ % MaxFramesInFlight;
+	const uint64_t signalValue = nextSignalValue++;
+	const uint64_t waitValue = signalValue - MaxFramesInFlight;
+
+	// Ensre its safe to start recording commands for this frame resource
+	VkSemaphoreWaitInfo waitInfo{
+		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+		.semaphoreCount = 1,
+		.pSemaphores = &timelineSemaphore,
+		.pValues = &waitValue,
+	};
+	vkWaitSemaphores(device, &waitInfo, UINT64_MAX);
+
+	// Reset the command pool for this frame resource
+	FrameResources& frameResource = frameResources[frameResourceIndex];
+	vkResetCommandPool(device, frameResource.commandPool, 0);
+
+	// Acquire the next swapchain image
+	VkSemaphore imageAcquiredSemaphore = frameResource.imageAcquiredSemaphore;
+
+	uint32_t swapchainImageIndex;
+	VkResult acquireResult =
+		vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAcquiredSemaphore, VK_NULL_HANDLE, &swapchainImageIndex);
+
+	// Handle swapchain recreation if needed
+	if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR || acquireResult == VK_SUBOPTIMAL_KHR)
+	{
+		requireSwapchainRecreation = true;
+		return;
+	} else if (acquireResult != VK_SUCCESS)
+	{
+		errorCallback("Failed to acquire next swapchain image.");
+		return;
+	}
+
+	// Begin recording commands into the command buffer for this frame resource
+	VkCommandBufferBeginInfo commandBufferBeginInfo{
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+	};
+	vkBeginCommandBuffer(frameResource.commandBuffer, &commandBufferBeginInfo);
+
+	// Transition the color and depth images
+	std::vector<VkImageMemoryBarrier2> imageBarriers{
+		{
+			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+			.srcAccessMask = 0,
+			.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+			.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+			.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+			.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			.image = swapchainImages[swapchainImageIndex],
+			.subresourceRange{
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			},
+		},
+		{
+			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.srcStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+			.srcAccessMask = 0,
+			.dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+			.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+			.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+			.newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+			.image = depthImage,
+			.subresourceRange{
+				.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			},
+		}
+	};
+
+	VkDependencyInfo dependencyInfo{
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.imageMemoryBarrierCount = static_cast<uint32_t>(imageBarriers.size()),
+		.pImageMemoryBarriers = imageBarriers.data(),
+	};
+	vkCmdPipelineBarrier2(frameResource.commandBuffer, &dependencyInfo);
+
+	// Setup attachment info
+	VkRenderingAttachmentInfo colorAttachmentInfo{
+		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+		.imageView = swapchainImageViews[swapchainImageIndex],
+		.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,	 // clear the image to start
+		.storeOp = VK_ATTACHMENT_STORE_OP_STORE, // keep image for presentation
+		.clearValue{.color{0.01f, 0.01f, 0.01f, 1.0f}},
+	};
+	VkRenderingAttachmentInfo depthAttachmentInfo{
+		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+		.imageView = depthImageView,
+		.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,		 // clear the depth buffer to start
+		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, // don't care after rendering
+		.clearValue{.depthStencil{1.0f, 0}},
+	};
+
+	// Setup rendering info
+	VkRenderingInfo renderingInfo{
+		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+		.renderArea{.offset{0, 0}, .extent{swapchainWidth, swapchainHeight}},
+		.layerCount = 1,
+		.colorAttachmentCount = 1,
+		.pColorAttachments = &colorAttachmentInfo,
+		.pDepthAttachment = &depthAttachmentInfo,
+	};
+
+	// Begin dynamic rendering
+	vkCmdBeginRendering(frameResource.commandBuffer, &renderingInfo);
+	{
+		// Set the viewport dynamically
+		VkViewport viewport{
+			.x = 0.0f,
+			.y = 0.0f,
+			.width = static_cast<float>(swapchainWidth),
+			.height = static_cast<float>(swapchainHeight),
+		};
+		vkCmdSetViewport(frameResource.commandBuffer, 0, 1, &viewport);
+
+		// Set the scissor dynamically
+		VkRect2D scissor{
+			.offset{0, 0},
+			.extent{swapchainWidth, swapchainHeight},
+		};
+		vkCmdSetScissor(frameResource.commandBuffer, 0, 1, &scissor);
+
+		// Bind the graphics pipeline
+		vkCmdBindPipeline(frameResource.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+		// Draw our first triangle!
+		vkCmdDraw(frameResource.commandBuffer, 3, 1, 0, 0);
+	}
+	// End dynamic rendering
+	vkCmdEndRendering(frameResource.commandBuffer);
+
+	// Transition the color attachment to presentation layout
+	VkImageMemoryBarrier2 presentationBarrier{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+		.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+		.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
+		.dstAccessMask = 0,
+		.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+		.image = swapchainImages[swapchainImageIndex],
+		.subresourceRange{
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1
+		},
+	};
+	VkDependencyInfo presentationDependencyInfo{
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.imageMemoryBarrierCount = 1,
+		.pImageMemoryBarriers = &presentationBarrier,
+	};
+	vkCmdPipelineBarrier2(frameResource.commandBuffer, &presentationDependencyInfo);
+
+	// Finish recording commands
+	if (vkEndCommandBuffer(frameResource.commandBuffer) != VK_SUCCESS)
+	{
+		errorCallback("Failed to record command buffer.");
+		return;
+	}
+
+	// Ensure swapchain image is ready for rendering by waiting on the image-acquired semaphore
+	VkSemaphoreSubmitInfo imageAcquireWaitInfo{
+		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+		.semaphore = imageAcquiredSemaphore,
+		.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+	};
+
+	// Signal that the image is ready for presentation
+	std::vector<VkSemaphoreSubmitInfo> semaphoreSignalInfos{
+		// Signal the render-complete binary semaphore for this swapchain image
+		{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+			.semaphore = renderCompleteSemaphores[swapchainImageIndex],
+			.stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+		},
+		// Signal the timeline semaphore
+		{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+			.semaphore = timelineSemaphore,
+			.value = signalValue,
+			.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+		}
+	};
+
+	// Submit the command buffer to the graphics queue
+	VkCommandBufferSubmitInfo commandBufferSubmitInfo{
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+		.commandBuffer = frameResource.commandBuffer,
+	};
+	VkSubmitInfo2 submitInfo{
+		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+		.waitSemaphoreInfoCount = 1,
+		.pWaitSemaphoreInfos = &imageAcquireWaitInfo,
+		.commandBufferInfoCount = 1,
+		.pCommandBufferInfos = &commandBufferSubmitInfo,
+		.signalSemaphoreInfoCount = static_cast<uint32_t>(semaphoreSignalInfos.size()),
+		.pSignalSemaphoreInfos = semaphoreSignalInfos.data(),
+	};
+	vkQueueSubmit2(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+
+	// Present the swapchain image!
+	VkPresentInfoKHR presentInfo{
+		.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+		.waitSemaphoreCount = 1,
+		.pWaitSemaphores = &renderCompleteSemaphores[swapchainImageIndex],
+		.swapchainCount = 1,
+		.pSwapchains = &swapchain,
+		.pImageIndices = &swapchainImageIndex,
+		.pResults = nullptr,
+	};
+	vkQueuePresentKHR(graphicsQueue, &presentInfo);
+}
 
 void Renderer::shutdown()
 {

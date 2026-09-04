@@ -45,6 +45,9 @@ class Renderer
 	SDL_Window* window{nullptr};
 	std::function<void(const std::string&)> errorCallback;
 
+	uint64_t frameIndex{0};
+	uint64_t nextSignalValue{MaxFramesInFlight + 1};
+
 	VkInstance vulkanInstance{VK_NULL_HANDLE};
 	VkPhysicalDevice physicalDevice{VK_NULL_HANDLE};
 	VkDevice device{VK_NULL_HANDLE};
