@@ -2,12 +2,9 @@
 
 #include <SDL3/SDL.h>
 
-
 // SDL error message box
 void Application::showError(const std::string& errorMessage)
-{
-	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", errorMessage.c_str(), window);
-}
+{ SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", errorMessage.c_str(), window); }
 
 bool Application::initialize()
 {
@@ -55,6 +52,7 @@ void Application::run()
 			{
 				width = event.window.data1;
 				height = event.window.data2;
+				renderer.invalidateSwapchain();
 				break;
 			}
 		}
@@ -68,10 +66,7 @@ void Application::shutdown()
 {
 	renderer.shutdown();
 
-	if (window)
-	{
-		SDL_DestroyWindow(window);
-	}
+	if (window) { SDL_DestroyWindow(window); }
 
 	SDL_Quit();
 }

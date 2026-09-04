@@ -29,6 +29,8 @@ class Renderer
 	void render();
 	void shutdown();
 
+	void invalidateSwapchain();
+
   private:
 	constexpr static uint32_t VulkanAPIVersion{VK_API_VERSION_1_4};
 	constexpr static uint32_t MaxFramesInFlight{2};

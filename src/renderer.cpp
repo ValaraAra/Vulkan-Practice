@@ -392,6 +392,9 @@ bool Renderer::createSwapchain()
 		static_cast<uint32_t>(height), surfaceCapabilities.minImageExtent.height, surfaceCapabilities.maxImageExtent.height
 	);
 
+	// Should never actually happen, but just in case
+	if (swapchainWidth == 0 || swapchainHeight == 0) { return false; }
+
 	// Determine the number of images in the swapchain
 	uint32_t requestedImageCount = std::max(2u, surfaceCapabilities.minImageCount);
 	if (surfaceCapabilities.maxImageCount > 0)
@@ -514,13 +517,16 @@ void Renderer::destroySwapchain()
 {
 	for (VkImageView imageView : swapchainImageViews)
 	{
-		vkDestroyImageView(device, imageView, nullptr);
+		if (imageView != VK_NULL_HANDLE) { vkDestroyImageView(device, imageView, nullptr); }
 	}
+	swapchainImageViews.clear();
 
 	for (VkSemaphore& semaphore : renderCompleteSemaphores)
 	{
-		vkDestroySemaphore(device, semaphore, nullptr);
+		if (semaphore != VK_NULL_HANDLE) { vkDestroySemaphore(device, semaphore, nullptr); }
 	}
+	renderCompleteSemaphores.clear();
+	swapchainImages.clear();
 
 	if (swapchain != VK_NULL_HANDLE)
 	{
@@ -805,14 +811,25 @@ bool Renderer::createCommandBuffers()
 	return true;
 }
 
+void Renderer::invalidateSwapchain()
+{ requireSwapchainRecreation = true; }
+
 void Renderer::render()
 {
-	// First check swapchain validity
+	// First check if the window has a valid size (minimized or resized to 0 width/height).
+	int windowWidth, windowHeight;
+	if (!SDL_GetWindowSizeInPixels(window, &windowWidth, &windowHeight) || windowWidth == 0 || windowHeight == 0
+		|| (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED))
+	{
+		return;
+	}
+
+	// Then check swapchain validity
 	if (requireSwapchainRecreation)
 	{
 		vkDeviceWaitIdle(device);
 		destroySwapchain();
-		createSwapchain();
+		if (!createSwapchain()) { return; }
 		requireSwapchainRecreation = false;
 	}
 
