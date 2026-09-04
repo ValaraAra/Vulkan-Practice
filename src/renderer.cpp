@@ -78,15 +78,7 @@ bool Renderer::initialize(SDL_Window* window, std::function<void(const std::stri
 		return false;
 	}
 
-	int width, height;
-	SDL_GetWindowSize(window, &width, &height);
-	if (width == NULL || height == NULL)
-	{
-		errorCallback("Error getting window size.");
-		return false;
-	}
-
-	if (!createSwapchain(width, height))
+	if (!createSwapchain())
 	{
 		errorCallback("Error creating swapchain.");
 		return false;
@@ -375,10 +367,14 @@ bool Renderer::initializeVMA()
 	return true;
 }
 
-bool Renderer::createSwapchain(uint32_t width, uint32_t height)
+bool Renderer::createSwapchain()
 {
-	swapchainWidth = width;
-	swapchainHeight = height;
+	int width, height;
+	if (!SDL_GetWindowSizeInPixels(window, &width, &height))
+	{
+		errorCallback("Error getting window size.");
+		return false;
+	}
 
 	// Get surface capabilities
 	VkSurfaceCapabilitiesKHR surfaceCapabilities{};
@@ -387,6 +383,14 @@ bool Renderer::createSwapchain(uint32_t width, uint32_t height)
 		errorCallback("Failed to get surface capabilities.");
 		return false;
 	}
+
+	// Clamp swapchain extent to surface capabilities
+	swapchainWidth = std::clamp(
+		static_cast<uint32_t>(width), surfaceCapabilities.minImageExtent.width, surfaceCapabilities.maxImageExtent.width
+	);
+	swapchainHeight = std::clamp(
+		static_cast<uint32_t>(height), surfaceCapabilities.minImageExtent.height, surfaceCapabilities.maxImageExtent.height
+	);
 
 	// Determine the number of images in the swapchain
 	uint32_t requestedImageCount = std::max(2u, surfaceCapabilities.minImageCount);
@@ -807,13 +811,8 @@ void Renderer::render()
 	if (requireSwapchainRecreation)
 	{
 		vkDeviceWaitIdle(device);
-
 		destroySwapchain();
-
-		int width, height;
-		SDL_GetWindowSize(window, &width, &height);
-		createSwapchain(width, height);
-
+		createSwapchain();
 		requireSwapchainRecreation = false;
 	}
 
