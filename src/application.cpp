@@ -38,6 +38,7 @@ bool Application::initialize()
 	return true;
 }
 
+// Returns false if further event handling should stop early
 bool Application::handleEvent(SDL_Event& event)
 {
 	if (event.type == SDL_EVENT_QUIT)
@@ -67,6 +68,9 @@ void Application::run()
 		{
 			if (!handleEvent(event)) { break; }
 		}
+
+		// Running flag may have changed
+		if (!running) { break; }
 
 		// Skip rendering if the window doesn't have a valid size (minimized or resized to 0 width/height)
 		int windowWidth, windowHeight;
