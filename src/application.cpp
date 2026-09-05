@@ -30,8 +30,6 @@ bool Application::initialize()
 	}
 	catch (const RenderError& error)
 	{
-		renderer.shutdown();
-
 		showError("Renderer initialization failed!\n\n" + std::string(error.what()));
 
 		return false;
@@ -70,8 +68,6 @@ void Application::run()
 		}
 		catch (const RenderError& error)
 		{
-			renderer.shutdown();
-
 			showError("Rendering failed!\n\n" + std::string(error.what()));
 
 			running = false;

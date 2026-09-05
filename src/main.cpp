@@ -5,7 +5,10 @@ int main(int argc, char* argv[])
 	Application app;
 
 	if (!app.initialize())
+	{
+		app.shutdown();
 		return 1;
+	}
 
 	app.run();
 	app.shutdown();
