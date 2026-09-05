@@ -816,7 +816,7 @@ void Renderer::invalidateSwapchain()
 
 void Renderer::render()
 {
-	// First check if the window has a valid size (minimized or resized to 0 width/height).
+	// Skip rendering if the window doesn't have a valid size (minimized or resized to 0 width/height)
 	int windowWidth, windowHeight;
 	if (!SDL_GetWindowSizeInPixels(window, &windowWidth, &windowHeight) || windowWidth == 0 || windowHeight == 0
 		|| (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED))
@@ -824,7 +824,7 @@ void Renderer::render()
 		return;
 	}
 
-	// Then check swapchain validity
+	// Check swapchain validity
 	if (requireSwapchainRecreation)
 	{
 		vkDeviceWaitIdle(device);
@@ -833,11 +833,12 @@ void Renderer::render()
 		requireSwapchainRecreation = false;
 	}
 
-	const uint32_t frameResourceIndex = frameIndex++ % MaxFramesInFlight;
-	const uint64_t signalValue = nextSignalValue++;
+	// Determine frame resource index and timeline semaphore values
+	const uint32_t frameResourceIndex = frameIndex % MaxFramesInFlight;
+	const uint64_t signalValue = nextSignalValue;
 	const uint64_t waitValue = signalValue - MaxFramesInFlight;
 
-	// Ensre its safe to start recording commands for this frame resource
+	// Ensure it's safe to start recording commands for this frame resource
 	VkSemaphoreWaitInfo waitInfo{
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
 		.semaphoreCount = 1,
@@ -850,7 +851,7 @@ void Renderer::render()
 	FrameResources& frameResource = frameResources[frameResourceIndex];
 	vkResetCommandPool(device, frameResource.commandPool, 0);
 
-	// Acquire the next swapchain image
+	// Acquire next swapchain image
 	VkSemaphore imageAcquiredSemaphore = frameResource.imageAcquiredSemaphore;
 
 	uint32_t swapchainImageIndex;
@@ -867,6 +868,10 @@ void Renderer::render()
 		errorCallback("Failed to acquire next swapchain image.");
 		return;
 	}
+
+	// Image acquired, increment frame index and timeline signal value
+	++frameIndex;
+	++nextSignalValue;
 
 	// Begin recording commands into the command buffer for this frame resource
 	VkCommandBufferBeginInfo commandBufferBeginInfo{
