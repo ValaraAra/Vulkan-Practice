@@ -1047,7 +1047,11 @@ void Renderer::render()
 		.signalSemaphoreInfoCount = static_cast<uint32_t>(semaphoreSignalInfos.size()),
 		.pSignalSemaphoreInfos = semaphoreSignalInfos.data(),
 	};
-	vkQueueSubmit2(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+	if (vkQueueSubmit2(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
+	{
+		errorCallback("Failed to submit command buffer.");
+		return;
+	}
 
 	// Present the swapchain image!
 	VkPresentInfoKHR presentInfo{
@@ -1059,7 +1063,16 @@ void Renderer::render()
 		.pImageIndices = &swapchainImageIndex,
 		.pResults = nullptr,
 	};
-	vkQueuePresentKHR(graphicsQueue, &presentInfo);
+	const VkResult presentResult = vkQueuePresentKHR(graphicsQueue, &presentInfo);
+
+	// Handle swapchain recreation if needed
+	if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR)
+	{
+		requireSwapchainRecreation = true;
+	} else if (presentResult != VK_SUCCESS)
+	{
+		errorCallback("Failed to present swapchain image.");
+	}
 }
 
 void Renderer::shutdown()
