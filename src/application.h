@@ -22,4 +22,5 @@ class Application
 	bool running = false;
 
 	void showError(const std::string& errorMessage);
+	bool handleEvent(SDL_Event& event);
 };

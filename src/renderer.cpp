@@ -730,14 +730,6 @@ void Renderer::invalidateSwapchain()
 
 void Renderer::render()
 {
-	// Skip rendering if the window doesn't have a valid size (minimized or resized to 0 width/height)
-	int windowWidth, windowHeight;
-	if (!SDL_GetWindowSizeInPixels(window, &windowWidth, &windowHeight) || windowWidth == 0 || windowHeight == 0
-		|| (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED))
-	{
-		return;
-	}
-
 	// Check swapchain validity
 	if (requireSwapchainRecreation)
 	{

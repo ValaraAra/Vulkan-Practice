@@ -38,6 +38,23 @@ bool Application::initialize()
 	return true;
 }
 
+bool Application::handleEvent(SDL_Event& event)
+{
+	if (event.type == SDL_EVENT_QUIT)
+	{
+		running = false;
+		return false;
+	}
+
+	if (event.type == SDL_EVENT_WINDOW_RESIZED)
+	{
+		renderer.invalidateSwapchain();
+		return true;
+	}
+
+	return true;
+}
+
 void Application::run()
 {
 	running = true;
@@ -48,17 +65,17 @@ void Application::run()
 		SDL_Event event;
 		while (SDL_PollEvent(&event))
 		{
-			if (event.type == SDL_EVENT_QUIT)
-			{
-				running = false;
-				break;
-			}
+			if (!handleEvent(event)) { break; }
+		}
 
-			if (event.type == SDL_EVENT_WINDOW_RESIZED)
-			{
-				renderer.invalidateSwapchain();
-				break;
-			}
+		// Skip rendering if the window doesn't have a valid size (minimized or resized to 0 width/height)
+		int windowWidth, windowHeight;
+		if (!SDL_GetWindowSizeInPixels(window, &windowWidth, &windowHeight) || windowWidth == 0 || windowHeight == 0
+			|| (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED))
+		{
+			if (SDL_WaitEventTimeout(&event, 100)) { handleEvent(event); }
+
+			continue;
 		}
 
 		// Render
