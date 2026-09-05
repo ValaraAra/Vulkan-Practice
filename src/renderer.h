@@ -93,4 +93,5 @@ class Renderer
 	VkPipeline createGraphicsPipeline();
 	bool createSyncResources();
 	bool createCommandBuffers();
+	void recreateImageAcquiredSemaphore(FrameResources& frameResource);
 };

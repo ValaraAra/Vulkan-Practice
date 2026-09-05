@@ -779,6 +779,25 @@ bool Renderer::createSyncResources()
 	return true;
 }
 
+void Renderer::recreateImageAcquiredSemaphore(FrameResources& frameResource)
+{
+	// Destroy existing semaphore
+	vkDestroySemaphore(device, frameResource.imageAcquiredSemaphore, nullptr);
+
+	// Create a new one
+	VkSemaphoreCreateInfo semaphoreInfo{
+		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+	};
+	const VkResult result = vkCreateSemaphore(device, &semaphoreInfo, nullptr, &frameResource.imageAcquiredSemaphore);
+
+	// Handle failure
+	if (result != VK_SUCCESS)
+	{
+		errorCallback("Failed to recreate image-acquired semaphore.");
+		frameResource.imageAcquiredSemaphore = VK_NULL_HANDLE;
+	}
+}
+
 bool Renderer::createCommandBuffers()
 {
 	for (FrameResources& frameResource : frameResources)
@@ -861,6 +880,7 @@ void Renderer::render()
 	// Handle swapchain recreation if needed
 	if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR || acquireResult == VK_SUBOPTIMAL_KHR)
 	{
+		recreateImageAcquiredSemaphore(frameResource);
 		requireSwapchainRecreation = true;
 		return;
 	} else if (acquireResult != VK_SUCCESS)
@@ -1006,6 +1026,7 @@ void Renderer::render()
 	if (vkEndCommandBuffer(frameResource.commandBuffer) != VK_SUCCESS)
 	{
 		errorCallback("Failed to record command buffer.");
+		recreateImageAcquiredSemaphore(frameResource);
 		return;
 	}
 
@@ -1050,6 +1071,7 @@ void Renderer::render()
 	if (vkQueueSubmit2(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
 	{
 		errorCallback("Failed to submit command buffer.");
+		recreateImageAcquiredSemaphore(frameResource);
 		return;
 	}
 
