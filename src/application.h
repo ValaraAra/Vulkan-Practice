@@ -16,11 +16,8 @@ class Application
 	SDL_Window* window = nullptr;
 	Renderer renderer;
 
-	static const int DEFAULT_WIDTH = 1280;
-	static const int DEFAULT_HEIGHT = 720;
-
-	uint32_t width = DEFAULT_WIDTH;
-	uint32_t height = DEFAULT_HEIGHT;
+	static const uint32_t DEFAULT_WIDTH = 1280;
+	static const uint32_t DEFAULT_HEIGHT = 720;
 
 	bool running = false;
 
