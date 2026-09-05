@@ -23,3 +23,5 @@ BraceWrapping:
   AfterStruct: true
   AfterEnum: true
   AfterNamespace: true
+  BeforeCatch: true
+  BeforeElse: true
