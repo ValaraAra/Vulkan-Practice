@@ -50,6 +50,8 @@ class Renderer
 		void* pUserData
 	);
 
+	VkDebugUtilsMessengerEXT debugMessenger{VK_NULL_HANDLE};
+
 	SDL_Window* window{nullptr};
 
 	uint64_t frameIndex{0};

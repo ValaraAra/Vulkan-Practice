@@ -96,6 +96,12 @@ void Renderer::createVulkanInstance()
 	}
 
 	volkLoadInstance(vulkanInstance);
+
+	// Create debug messenger
+	if (vkCreateDebugUtilsMessengerEXT(vulkanInstance, &debugInfo, nullptr, &debugMessenger) != VK_SUCCESS)
+	{
+		throw RenderError("Failed to create debug messenger.");
+	}
 }
 
 void Renderer::createSurface()
@@ -1046,6 +1052,12 @@ void Renderer::shutdown()
 	{
 		vkDestroyDevice(device, nullptr);
 		device = VK_NULL_HANDLE;
+	}
+
+	if (debugMessenger)
+	{
+		vkDestroyDebugUtilsMessengerEXT(vulkanInstance, debugMessenger, nullptr);
+		debugMessenger = VK_NULL_HANDLE;
 	}
 
 	if (vulkanInstance)
