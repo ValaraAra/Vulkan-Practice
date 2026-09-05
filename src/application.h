@@ -1,9 +1,8 @@
 #pragma once
 #include "renderer.h"
 
+#include <SDL3/SDL.h>
 #include <cstdint>
-
-struct SDL_Window;
 
 class Application
 {
@@ -13,14 +12,15 @@ class Application
 	void shutdown();
 
   private:
-	SDL_Window* window = nullptr;
-	Renderer renderer;
+	void showError(const std::string& errorMessage);
+	bool handleEvent(SDL_Event& event);
 
+  private:
 	static const uint32_t DEFAULT_WIDTH = 1280;
 	static const uint32_t DEFAULT_HEIGHT = 720;
 
-	bool running = false;
+	SDL_Window* window = nullptr;
+	Renderer renderer;
 
-	void showError(const std::string& errorMessage);
-	bool handleEvent(SDL_Event& event);
+	bool running = false;
 };

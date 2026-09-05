@@ -1,11 +1,5 @@
 #include "application.h"
 
-#include <SDL3/SDL.h>
-
-// SDL error message box
-void Application::showError(const std::string& errorMessage)
-{ SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", errorMessage.c_str(), window); }
-
 bool Application::initialize()
 {
 	// SDL initialization
@@ -31,26 +25,7 @@ bool Application::initialize()
 	catch (const RenderError& error)
 	{
 		showError("Renderer initialization failed!\n\n" + std::string(error.what()));
-
 		return false;
-	}
-
-	return true;
-}
-
-// Returns false if further event handling should stop early
-bool Application::handleEvent(SDL_Event& event)
-{
-	if (event.type == SDL_EVENT_QUIT)
-	{
-		running = false;
-		return false;
-	}
-
-	if (event.type == SDL_EVENT_WINDOW_RESIZED)
-	{
-		renderer.invalidateSwapchain();
-		return true;
 	}
 
 	return true;
@@ -104,4 +79,26 @@ void Application::shutdown()
 	if (window) { SDL_DestroyWindow(window); }
 
 	SDL_Quit();
+}
+
+// SDL error message box
+void Application::showError(const std::string& errorMessage)
+{ SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", errorMessage.c_str(), window); }
+
+// Returns false if further event handling should stop early
+bool Application::handleEvent(SDL_Event& event)
+{
+	if (event.type == SDL_EVENT_QUIT)
+	{
+		running = false;
+		return false;
+	}
+
+	if (event.type == SDL_EVENT_WINDOW_RESIZED)
+	{
+		renderer.invalidateSwapchain();
+		return true;
+	}
+
+	return true;
 }

@@ -38,11 +38,6 @@ class Renderer
 	void invalidateSwapchain();
 
   private:
-	constexpr static uint32_t VulkanAPIVersion{VK_API_VERSION_1_4};
-	constexpr static uint32_t MaxFramesInFlight{2};
-	constexpr static VkFormat swapchainFormat{VK_FORMAT_B8G8R8A8_SRGB};
-	constexpr static VkFormat depthFormat{VK_FORMAT_D32_SFLOAT};
-
 	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 		VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 		VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -50,9 +45,30 @@ class Renderer
 		void* pUserData
 	);
 
-	VkDebugUtilsMessengerEXT debugMessenger{VK_NULL_HANDLE};
+	void createVulkanInstance();
+	void createSurface();
+	VkPhysicalDevice selectPhysicalDevice();
+	void selectGraphicsQueue();
+	void createDevice(VkPhysicalDevice physicalDevice);
+	void initializeVMA();
+	void createSwapchain();
+	void destroySwapchain();
+	VkShaderModule createShaderModule(const std::string& filename, shaderc_shader_kind kind) const;
+	void createShaders();
+	VkPipeline createGraphicsPipeline();
+	void createSyncResources();
+	void recreateImageAcquiredSemaphore(FrameResources& frameResource);
+	void createCommandBuffers();
+
+  private:
+	constexpr static uint32_t VulkanAPIVersion{VK_API_VERSION_1_4};
+	constexpr static uint32_t MaxFramesInFlight{2};
+	constexpr static VkFormat swapchainFormat{VK_FORMAT_B8G8R8A8_SRGB};
+	constexpr static VkFormat depthFormat{VK_FORMAT_D32_SFLOAT};
 
 	SDL_Window* window{nullptr};
+
+	VkDebugUtilsMessengerEXT debugMessenger{VK_NULL_HANDLE};
 
 	uint64_t frameIndex{0};
 	uint64_t nextSignalValue{MaxFramesInFlight + 1};
@@ -86,19 +102,4 @@ class Renderer
 
 	VkSemaphore timelineSemaphore{VK_NULL_HANDLE};
 	std::array<FrameResources, MaxFramesInFlight> frameResources;
-
-	void createVulkanInstance();
-	void createSurface();
-	VkPhysicalDevice selectPhysicalDevice();
-	void selectGraphicsQueue();
-	void createDevice(VkPhysicalDevice physicalDevice);
-	void initializeVMA();
-	void createSwapchain();
-	void destroySwapchain();
-	VkShaderModule createShaderModule(const std::string& filename, shaderc_shader_kind kind) const;
-	void createShaders();
-	VkPipeline createGraphicsPipeline();
-	void createSyncResources();
-	void createCommandBuffers();
-	void recreateImageAcquiredSemaphore(FrameResources& frameResource);
 };
