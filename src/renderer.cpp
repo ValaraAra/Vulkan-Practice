@@ -28,91 +28,26 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Renderer::debugCallback(
 	return VK_FALSE;
 }
 
-bool Renderer::initialize(SDL_Window* window, std::function<void(const std::string&)> errorCallback)
+void Renderer::initialize(SDL_Window* window)
 {
 	this->window = window;
-	this->errorCallback = errorCallback;
 
-	if (volkInitialize() != VK_SUCCESS)
-	{
-		errorCallback("Error initializing Volk.");
-		return false;
-	}
+	if (volkInitialize() != VK_SUCCESS) { throw RenderError("Error initializing Volk."); }
 
-	if (!createVulkanInstance())
-	{
-		errorCallback("Error creating Vulkan instance.");
-		return false;
-	}
-
-	volkLoadInstance(vulkanInstance);
-
-	if (!createSurface())
-	{
-		errorCallback("Error creating vulkan window surface.");
-		return false;
-	}
-
+	createVulkanInstance();
+	createSurface();
 	physicalDevice = selectPhysicalDevice();
-	if (physicalDevice == VK_NULL_HANDLE)
-	{
-		errorCallback("Error selecting physical device.");
-		return false;
-	}
-
-	if (!selectGraphicsQueue())
-	{
-		errorCallback("Error selecting graphics queue.");
-		return false;
-	}
-
-	if (!createDevice(physicalDevice))
-	{
-		errorCallback("Error creating logical device.");
-		return false;
-	}
-
-	if (!initializeVMA())
-	{
-		errorCallback("Error initializing VMA.");
-		return false;
-	}
-
-	if (!createSwapchain())
-	{
-		errorCallback("Error creating swapchain.");
-		return false;
-	}
-
-	if (!createShaders())
-	{
-		errorCallback("Error creating shaders.");
-		return false;
-	}
-
+	selectGraphicsQueue();
+	createDevice(physicalDevice);
+	initializeVMA();
+	createSwapchain();
+	createShaders();
 	pipeline = createGraphicsPipeline();
-	if (pipeline == VK_NULL_HANDLE)
-	{
-		errorCallback("Error creating graphics pipeline.");
-		return false;
-	}
-
-	if (!createSyncResources())
-	{
-		errorCallback("Error creating synchronization resources.");
-		return false;
-	}
-
-	if (!createCommandBuffers())
-	{
-		errorCallback("Error creating command buffers.");
-		return false;
-	}
-
-	return true;
+	createSyncResources();
+	createCommandBuffers();
 }
 
-bool Renderer::createVulkanInstance()
+void Renderer::createVulkanInstance()
 {
 	VkApplicationInfo applicationInfo{
 		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -155,17 +90,20 @@ bool Renderer::createVulkanInstance()
 		.ppEnabledExtensionNames = requestedExtensions.data(),
 	};
 
-	return vkCreateInstance(&instanceCreateInfo, nullptr, &vulkanInstance) == VK_SUCCESS;
+	if (vkCreateInstance(&instanceCreateInfo, nullptr, &vulkanInstance) != VK_SUCCESS)
+	{
+		throw RenderError("Failed to create Vulkan instance.");
+	}
+
+	volkLoadInstance(vulkanInstance);
 }
 
-bool Renderer::createSurface()
+void Renderer::createSurface()
 {
 	if (!SDL_Vulkan_CreateSurface(window, vulkanInstance, nullptr, &surface))
 	{
-		errorCallback("Vulkan surface creation failed!\n\n" + std::string(SDL_GetError()));
-		return false;
+		throw RenderError("Vulkan surface creation failed!\n\n" + std::string(SDL_GetError()));
 	}
-	return true;
 }
 
 // Defaults to first device, but will try to find a discrete GPU if available.
@@ -178,39 +116,35 @@ VkPhysicalDevice Renderer::selectPhysicalDevice()
 	std::vector<VkPhysicalDevice> physicalDevices(physicalDeviceCount);
 	vkEnumeratePhysicalDevices(vulkanInstance, &physicalDeviceCount, physicalDevices.data());
 
-	if (physicalDeviceCount == 0)
-	{
-		errorCallback("No physical devices found.");
-		return VK_NULL_HANDLE;
-	}
+	if (physicalDeviceCount == 0) { throw RenderError("No physical devices found."); }
 
 	// Default to first device
-	VkPhysicalDevice physicalDevice = physicalDevices[0];
+	VkPhysicalDevice selectedDevice = physicalDevices[0];
 
 	// Try to find a discrete GPU
-	for (const auto& device : physicalDevices)
+	for (const auto& currentDevice : physicalDevices)
 	{
 		VkPhysicalDeviceProperties deviceProperties{};
-		vkGetPhysicalDeviceProperties(device, &deviceProperties);
+		vkGetPhysicalDeviceProperties(currentDevice, &deviceProperties);
 
 		if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
 		{
-			physicalDevice = device;
+			selectedDevice = currentDevice;
 			break;
 		}
 	}
 
 	// Print selected device name
 	VkPhysicalDeviceProperties props{};
-	vkGetPhysicalDeviceProperties(physicalDevice, &props);
+	vkGetPhysicalDeviceProperties(selectedDevice, &props);
 	std::cout << "Selected physical device: " << props.deviceName << std::endl;
 
 	// Ensure the requested swapchain format is supported
 	uint32_t formatCount = 0;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, nullptr);
+	vkGetPhysicalDeviceSurfaceFormatsKHR(selectedDevice, surface, &formatCount, nullptr);
 
 	std::vector<VkSurfaceFormatKHR> surfaceFormats(formatCount);
-	vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, surfaceFormats.data());
+	vkGetPhysicalDeviceSurfaceFormatsKHR(selectedDevice, surface, &formatCount, surfaceFormats.data());
 
 	bool formatSupported = false;
 	for (const VkSurfaceFormatKHR& surfaceFormat : surfaceFormats)
@@ -224,14 +158,15 @@ VkPhysicalDevice Renderer::selectPhysicalDevice()
 
 	if (!formatSupported)
 	{
-		errorCallback("Requested swapchain format not supported by the selected physical device and surface combination.");
-		return VK_NULL_HANDLE;
+		throw RenderError(
+			"Requested swapchain format not supported by the selected physical device and surface combination."
+		);
 	}
 
-	return physicalDevice;
+	return selectedDevice;
 }
 
-bool Renderer::selectGraphicsQueue()
+void Renderer::selectGraphicsQueue()
 {
 	// Get queue family count
 	uint32_t queueFamilyCount = 0;
@@ -251,14 +186,14 @@ bool Renderer::selectGraphicsQueue()
 		if (presentSupport == VK_TRUE && queueFamily.queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT)
 		{
 			graphicsQueueFamilyIndex = i;
-			return true;
+			return;
 		}
 	}
 
-	return false;
+	throw RenderError("No suitable graphics queue found.");
 }
 
-bool Renderer::createDevice(VkPhysicalDevice physicalDevice)
+void Renderer::createDevice(VkPhysicalDevice physicalDevice)
 {
 	// Get supported features
 	VkPhysicalDeviceVulkan14Features supportedFeatures14{
@@ -279,8 +214,7 @@ bool Renderer::createDevice(VkPhysicalDevice physicalDevice)
 	if (!supportedFeatures13.dynamicRendering || !supportedFeatures13.synchronization2
 		|| !supportedFeatures12.timelineSemaphore)
 	{
-		errorCallback("Physical device does not support required features.");
-		return false;
+		throw RenderError("Physical device does not support required features.");
 	}
 
 	// Enable required features
@@ -329,22 +263,15 @@ bool Renderer::createDevice(VkPhysicalDevice physicalDevice)
 
 	if (vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device) != VK_SUCCESS)
 	{
-		errorCallback("Failed to create logical device.");
-		return false;
+		throw RenderError("Failed to create logical device.");
 	}
 
 	// Get the graphics queue
 	vkGetDeviceQueue(device, graphicsQueueFamilyIndex, 0, &graphicsQueue);
-	if (!graphicsQueue)
-	{
-		errorCallback("Failed to get graphics queue.");
-		return false;
-	}
-
-	return true;
+	if (!graphicsQueue) { throw RenderError("Failed to get graphics queue."); }
 }
 
-bool Renderer::initializeVMA()
+void Renderer::initializeVMA()
 {
 	VmaVulkanFunctions vmaFunctionInfo{};
 	VmaAllocatorCreateInfo vmaAllocatorInfo{
@@ -360,28 +287,20 @@ bool Renderer::initializeVMA()
 
 	if (vmaCreateAllocator(&vmaAllocatorInfo, &vmaAllocator) != VK_SUCCESS)
 	{
-		errorCallback("Failed to create VMA allocator.");
-		return false;
+		throw RenderError("Failed to create VMA allocator.");
 	}
-
-	return true;
 }
 
-bool Renderer::createSwapchain()
+void Renderer::createSwapchain()
 {
 	int width, height;
-	if (!SDL_GetWindowSizeInPixels(window, &width, &height))
-	{
-		errorCallback("Error getting window size.");
-		return false;
-	}
+	if (!SDL_GetWindowSizeInPixels(window, &width, &height)) { throw RenderError("Error getting window size."); }
 
 	// Get surface capabilities
 	VkSurfaceCapabilitiesKHR surfaceCapabilities{};
 	if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities) != VK_SUCCESS)
 	{
-		errorCallback("Failed to get surface capabilities.");
-		return false;
+		throw RenderError("Failed to get surface capabilities.");
 	}
 
 	// Clamp swapchain extent to surface capabilities
@@ -393,7 +312,7 @@ bool Renderer::createSwapchain()
 	);
 
 	// Should never actually happen, but just in case
-	if (swapchainWidth == 0 || swapchainHeight == 0) { return false; }
+	if (swapchainWidth == 0 || swapchainHeight == 0) { throw RenderError("Invalid swapchain dimensions."); }
 
 	// Determine the number of images in the swapchain
 	uint32_t requestedImageCount = std::max(2u, surfaceCapabilities.minImageCount);
@@ -419,8 +338,7 @@ bool Renderer::createSwapchain()
 
 	if (vkCreateSwapchainKHR(device, &swapchainCreateInfo, nullptr, &swapchain) != VK_SUCCESS)
 	{
-		errorCallback("Failed to create swapchain.");
-		return false;
+		throw RenderError("Failed to create swapchain.");
 	}
 
 	// Get the swapchain images
@@ -449,8 +367,7 @@ bool Renderer::createSwapchain()
 
 		if (vkCreateImageView(device, &imageViewInfo, nullptr, &swapchainImageViews[i]) != VK_SUCCESS)
 		{
-			errorCallback(std::format("Failed to create image view for swapchain image {}.", i));
-			return false;
+			throw RenderError(std::format("Failed to create image view for swapchain image {}.", i));
 		}
 	}
 
@@ -462,8 +379,7 @@ bool Renderer::createSwapchain()
 
 		if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderCompleteSemaphores[i]) != VK_SUCCESS)
 		{
-			errorCallback(std::format("Failed to create render-complete semaphore for swapchain image {}.", i));
-			return false;
+			throw RenderError(std::format("Failed to create render-complete semaphore for swapchain image {}.", i));
 		}
 	}
 
@@ -489,8 +405,7 @@ bool Renderer::createSwapchain()
 	if (vmaCreateImage(vmaAllocator, &depthImageInfo, &depthAllocationInfo, &depthImage, &depthImageAllocation, nullptr)
 		!= VK_SUCCESS)
 	{
-		errorCallback("Failed to create depth image.");
-		return false;
+		throw RenderError("Failed to create depth image.");
 	}
 
 	// Create image view for depth image
@@ -506,11 +421,8 @@ bool Renderer::createSwapchain()
 
 	if (vkCreateImageView(device, &depthImageViewInfo, nullptr, &depthImageView) != VK_SUCCESS)
 	{
-		errorCallback("Failed to create image view for depth image.");
-		return false;
+		throw RenderError("Failed to create image view for depth image.");
 	}
-
-	return true;
 }
 
 void Renderer::destroySwapchain()
@@ -553,11 +465,7 @@ VkShaderModule Renderer::createShaderModule(const std::string& filename, shaderc
 	std::string shaderPath = "shaders/" + filename;
 	std::string shaderSource = readTextFile(shaderPath);
 
-	if (shaderSource.empty())
-	{
-		errorCallback("Failed to read shader source for \"" + filename + "\".");
-		return VK_NULL_HANDLE;
-	}
+	if (shaderSource.empty()) { throw RenderError("Failed to read shader source for \"" + filename + "\"."); }
 
 	// Compile shader source to SPIR-V using shaderc
 	std::cout << "Compiling shader: " << shaderPath << std::endl;
@@ -574,8 +482,7 @@ VkShaderModule Renderer::createShaderModule(const std::string& filename, shaderc
 	if (result.GetCompilationStatus() != shaderc_compilation_status_success)
 	{
 		std::cerr << "Shader compilation failed for \"" << filename << "\": " << result.GetErrorMessage() << std::endl;
-		errorCallback("Failed to compile shader: " + filename + ".\n\n" + result.GetErrorMessage());
-		return VK_NULL_HANDLE;
+		throw RenderError("Failed to compile shader: " + filename + ".\n\n" + result.GetErrorMessage());
 	}
 
 	// Create shader module from SPIR-V
@@ -590,24 +497,19 @@ VkShaderModule Renderer::createShaderModule(const std::string& filename, shaderc
 	VkShaderModule shaderModule = VK_NULL_HANDLE;
 	if (vkCreateShaderModule(device, &shaderModuleInfo, nullptr, &shaderModule) != VK_SUCCESS)
 	{
-		errorCallback("Failed to create shader module for \"" + filename + "\".");
-		return VK_NULL_HANDLE;
+		throw RenderError("Failed to create shader module for \"" + filename + "\".");
 	}
 
 	return shaderModule;
 }
 
-bool Renderer::createShaders()
+void Renderer::createShaders()
 {
 	// Vertex shader
 	vertShader = createShaderModule("shader.vert", shaderc_vertex_shader);
-	if (vertShader == VK_NULL_HANDLE) { return false; }
 
 	// Fragment shader
 	fragShader = createShaderModule("shader.frag", shaderc_fragment_shader);
-	if (fragShader == VK_NULL_HANDLE) { return false; }
-
-	return true;
 }
 
 VkPipeline Renderer::createGraphicsPipeline()
@@ -621,8 +523,7 @@ VkPipeline Renderer::createGraphicsPipeline()
 
 	if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
 	{
-		errorCallback("Failed to create pipeline layout.");
-		return VK_NULL_HANDLE;
+		throw RenderError("Failed to create pipeline layout.");
 	}
 
 	// Shader stages
@@ -737,14 +638,13 @@ VkPipeline Renderer::createGraphicsPipeline()
 
 	if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS)
 	{
-		errorCallback("Failed to create graphics pipeline.");
-		return VK_NULL_HANDLE;
+		throw RenderError("Failed to create graphics pipeline.");
 	}
 
 	return pipeline;
 }
 
-bool Renderer::createSyncResources()
+void Renderer::createSyncResources()
 {
 	// Create timeline semaphore
 	VkSemaphoreTypeCreateInfo timelineSemaphoreInfo{
@@ -758,8 +658,7 @@ bool Renderer::createSyncResources()
 	};
 	if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &timelineSemaphore) != VK_SUCCESS)
 	{
-		errorCallback("Failed to create timeline semaphore.");
-		return false;
+		throw RenderError("Failed to create timeline semaphore.");
 	}
 
 	// Per-frame binary semaphore for image acquisition
@@ -771,34 +670,28 @@ bool Renderer::createSyncResources()
 		if (vkCreateSemaphore(device, &imageAcquiredSemaphoreInfo, nullptr, &frameResource.imageAcquiredSemaphore)
 			!= VK_SUCCESS)
 		{
-			errorCallback("Failed to create per-frame image-acquired semaphore.");
-			return false;
+			throw RenderError("Failed to create per-frame image-acquired semaphore.");
 		}
 	}
-
-	return true;
 }
 
 void Renderer::recreateImageAcquiredSemaphore(FrameResources& frameResource)
 {
 	// Destroy existing semaphore
 	vkDestroySemaphore(device, frameResource.imageAcquiredSemaphore, nullptr);
+	frameResource.imageAcquiredSemaphore = VK_NULL_HANDLE;
 
 	// Create a new one
 	VkSemaphoreCreateInfo semaphoreInfo{
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
 	};
-	const VkResult result = vkCreateSemaphore(device, &semaphoreInfo, nullptr, &frameResource.imageAcquiredSemaphore);
-
-	// Handle failure
-	if (result != VK_SUCCESS)
+	if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &frameResource.imageAcquiredSemaphore) != VK_SUCCESS)
 	{
-		errorCallback("Failed to recreate image-acquired semaphore.");
-		frameResource.imageAcquiredSemaphore = VK_NULL_HANDLE;
+		throw RenderError("Failed to recreate image-acquired semaphore.");
 	}
 }
 
-bool Renderer::createCommandBuffers()
+void Renderer::createCommandBuffers()
 {
 	for (FrameResources& frameResource : frameResources)
 	{
@@ -809,8 +702,7 @@ bool Renderer::createCommandBuffers()
 		};
 		if (vkCreateCommandPool(device, &commandPoolInfo, nullptr, &frameResource.commandPool) != VK_SUCCESS)
 		{
-			errorCallback("Failed to create per-frame command pool.");
-			return false;
+			throw RenderError("Failed to create per-frame command pool.");
 		}
 
 		// Create per-frame command buffer
@@ -822,12 +714,9 @@ bool Renderer::createCommandBuffers()
 		};
 		if (vkAllocateCommandBuffers(device, &commandBufferInfo, &frameResource.commandBuffer) != VK_SUCCESS)
 		{
-			errorCallback("Failed to allocate per-frame command buffer.");
-			return false;
+			throw RenderError("Failed to allocate per-frame command buffer.");
 		}
 	}
-
-	return true;
 }
 
 void Renderer::invalidateSwapchain()
@@ -848,7 +737,7 @@ void Renderer::render()
 	{
 		vkDeviceWaitIdle(device);
 		destroySwapchain();
-		if (!createSwapchain()) { return; }
+		createSwapchain();
 		requireSwapchainRecreation = false;
 	}
 
@@ -883,11 +772,8 @@ void Renderer::render()
 		recreateImageAcquiredSemaphore(frameResource);
 		requireSwapchainRecreation = true;
 		return;
-	} else if (acquireResult != VK_SUCCESS)
-	{
-		errorCallback("Failed to acquire next swapchain image.");
-		return;
 	}
+	else if (acquireResult != VK_SUCCESS) { throw RenderError("Failed to acquire next swapchain image."); }
 
 	// Image acquired, increment frame index and timeline signal value
 	++frameIndex;
@@ -952,7 +838,7 @@ void Renderer::render()
 		.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,	 // clear the image to start
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE, // keep image for presentation
-		.clearValue{.color{0.01f, 0.01f, 0.01f, 1.0f}},
+		.clearValue{.color{{0.01f, 0.01f, 0.01f, 1.0f}}},
 	};
 	VkRenderingAttachmentInfo depthAttachmentInfo{
 		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -1025,9 +911,7 @@ void Renderer::render()
 	// Finish recording commands
 	if (vkEndCommandBuffer(frameResource.commandBuffer) != VK_SUCCESS)
 	{
-		errorCallback("Failed to record command buffer.");
-		recreateImageAcquiredSemaphore(frameResource);
-		return;
+		throw RenderError("Failed to record command buffer.");
 	}
 
 	// Ensure swapchain image is ready for rendering by waiting on the image-acquired semaphore
@@ -1070,9 +954,7 @@ void Renderer::render()
 	};
 	if (vkQueueSubmit2(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
 	{
-		errorCallback("Failed to submit command buffer.");
-		recreateImageAcquiredSemaphore(frameResource);
-		return;
+		throw RenderError("Failed to submit command buffer.");
 	}
 
 	// Present the swapchain image!
@@ -1091,16 +973,14 @@ void Renderer::render()
 	if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR)
 	{
 		requireSwapchainRecreation = true;
-	} else if (presentResult != VK_SUCCESS)
-	{
-		errorCallback("Failed to present swapchain image.");
 	}
+	else if (presentResult != VK_SUCCESS) { throw RenderError("Failed to present swapchain image."); }
 }
 
 void Renderer::shutdown()
 {
-	// Flush GPU first
-	vkDeviceWaitIdle(device);
+	// Flush GPU first (if device exists)
+	if (device) { vkDeviceWaitIdle(device); }
 
 	// Frame/sync resources
 	if (timelineSemaphore)

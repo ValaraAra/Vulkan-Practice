@@ -1,11 +1,11 @@
 #pragma once
 
+#include <stdexcept>
 #include <vector>
 #define VK_NO_PROTOTYPES
 #include <SDL3/SDL.h>
 #include <array>
 #include <cstdint>
-#include <functional>
 #include <shaderc/shaderc.hpp>
 #include <string>
 #include <vulkan/vulkan.h>
@@ -22,10 +22,16 @@ struct FrameResources
 	VkSemaphore imageAcquiredSemaphore{VK_NULL_HANDLE};
 };
 
+class RenderError : public std::runtime_error
+{
+  public:
+	using std::runtime_error::runtime_error;
+};
+
 class Renderer
 {
   public:
-	bool initialize(SDL_Window* window, std::function<void(const std::string&)> errorCallback);
+	void initialize(SDL_Window* window);
 	void render();
 	void shutdown();
 
@@ -45,7 +51,6 @@ class Renderer
 	);
 
 	SDL_Window* window{nullptr};
-	std::function<void(const std::string&)> errorCallback;
 
 	uint64_t frameIndex{0};
 	uint64_t nextSignalValue{MaxFramesInFlight + 1};
@@ -80,18 +85,18 @@ class Renderer
 	VkSemaphore timelineSemaphore{VK_NULL_HANDLE};
 	std::array<FrameResources, MaxFramesInFlight> frameResources;
 
-	bool createVulkanInstance();
-	bool createSurface();
+	void createVulkanInstance();
+	void createSurface();
 	VkPhysicalDevice selectPhysicalDevice();
-	bool selectGraphicsQueue();
-	bool createDevice(VkPhysicalDevice physicalDevice);
-	bool initializeVMA();
-	bool createSwapchain();
+	void selectGraphicsQueue();
+	void createDevice(VkPhysicalDevice physicalDevice);
+	void initializeVMA();
+	void createSwapchain();
 	void destroySwapchain();
 	VkShaderModule createShaderModule(const std::string& filename, shaderc_shader_kind kind) const;
-	bool createShaders();
+	void createShaders();
 	VkPipeline createGraphicsPipeline();
-	bool createSyncResources();
-	bool createCommandBuffers();
+	void createSyncResources();
+	void createCommandBuffers();
 	void recreateImageAcquiredSemaphore(FrameResources& frameResource);
 };

@@ -11,7 +11,7 @@ bool Application::initialize()
 	// SDL initialization
 	if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
 	{
-		showError("SDL - Initialization failed! " + std::string(SDL_GetError()));
+		showError("SDL initialization failed! " + std::string(SDL_GetError()));
 		return false;
 	}
 
@@ -19,13 +19,21 @@ bool Application::initialize()
 	window = SDL_CreateWindow("Vulkan Practice", width, height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 	if (!window)
 	{
-		showError("SDL - Window creation failed! " + std::string(SDL_GetError()));
+		showError("SDL window creation failed! " + std::string(SDL_GetError()));
 		return false;
 	}
 
 	// Renderer initialization
-	if (!renderer.initialize(window, [this](const std::string& errorMessage) { showError("Renderer - " + errorMessage); }))
+	try
 	{
+		renderer.initialize(window);
+	}
+	catch (const RenderError& error)
+	{
+		renderer.shutdown();
+
+		showError("Renderer initialization failed!\n\n" + std::string(error.what()));
+
 		return false;
 	}
 
@@ -58,7 +66,19 @@ void Application::run()
 		}
 
 		// Render
-		renderer.render();
+		try
+		{
+			renderer.render();
+		}
+		catch (const RenderError& error)
+		{
+			renderer.shutdown();
+
+			showError("Rendering failed!\n\n" + std::string(error.what()));
+
+			running = false;
+			break;
+		}
 	}
 }
 
