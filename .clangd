@@ -1,2 +1,9 @@
 CompileFlags:
   Add: [-Wno-missing-designated-field-initializers]
+
+---
+# Silence diagnostics for "external/"
+If:
+  PathMatch: external/.*
+Diagnostics:
+  Suppress: [".*"]
