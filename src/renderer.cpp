@@ -553,7 +553,12 @@ void Renderer::createDevice(VkPhysicalDevice physicalDevice)
 
 	// Check for required features
 	if (!supportedFeatures13.dynamicRendering || !supportedFeatures13.synchronization2
-		|| !supportedFeatures12.timelineSemaphore)
+		|| !supportedFeatures12.timelineSemaphore || !supportedFeatures12.bufferDeviceAddress
+		|| !supportedFeatures12.scalarBlockLayout || !supportedFeatures12.descriptorIndexing
+		|| !supportedFeatures12.descriptorBindingSampledImageUpdateAfterBind
+		|| !supportedFeatures12.descriptorBindingPartiallyBound || !supportedFeatures12.runtimeDescriptorArray
+		|| !supportedFeatures12.shaderSampledImageArrayNonUniformIndexing || !supportedFeatures.features.shaderInt64
+		|| !supportedFeatures.features.multiDrawIndirect)
 	{
 		throw RenderError("Physical device does not support required features.");
 	}
@@ -572,12 +577,26 @@ void Renderer::createDevice(VkPhysicalDevice physicalDevice)
 	VkPhysicalDeviceVulkan12Features enabledFeatures12{
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
 		.pNext = &enabledFeatures13,
+		.descriptorIndexing = VK_TRUE,
+		.shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
+		.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE,
+		.descriptorBindingPartiallyBound = VK_TRUE,
+		.runtimeDescriptorArray = VK_TRUE,
+		.scalarBlockLayout = VK_TRUE,
 		.timelineSemaphore = VK_TRUE,
+		.bufferDeviceAddress = VK_TRUE,
 	};
 	VkPhysicalDeviceFeatures2 enabledFeatures{
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
 		.pNext = &enabledFeatures12,
+		.features{
+			.multiDrawIndirect = VK_TRUE,
+			.shaderInt64 = VK_TRUE,
+		}
 	};
+
+	// Device extensions
+	const std::vector<const char*> deviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 	// Request queues
 	std::vector<float> queuePriorities{1.0f};
@@ -587,9 +606,6 @@ void Renderer::createDevice(VkPhysicalDevice physicalDevice)
 		.queueCount = 1,
 		.pQueuePriorities = queuePriorities.data(),
 	};
-
-	// Device extensions
-	const std::vector<const char*> deviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 	// Create logical device
 	VkDeviceCreateInfo deviceCreateInfo{
