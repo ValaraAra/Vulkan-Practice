@@ -17,6 +17,7 @@ add_executable(vulkanapp
 	"${CMAKE_SOURCE_DIR}/src/renderer.cpp"
 	"${CMAKE_SOURCE_DIR}/src/utility.h"
 	"${CMAKE_SOURCE_DIR}/src/utility.cpp"
+	"${CMAKE_SOURCE_DIR}/src/resources.h"
 	"${CMAKE_SOURCE_DIR}/external/tinygltf.cpp"
 )
 
