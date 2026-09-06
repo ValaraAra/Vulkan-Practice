@@ -17,6 +17,11 @@
 	},
 	"C_Cpp.intelliSenseEngine": "disabled",
 
+	// VS Code problem suppression
+	"files.associations": {
+		"**/external/**": "plaintext"
+	},
+
 	// Editor
 	"editor.insertSpaces": false,
 	"editor.tabSize": 4,

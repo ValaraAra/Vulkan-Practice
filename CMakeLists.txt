@@ -10,13 +10,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_executable(vulkanapp
-	"src/main.cpp"
-	"src/application.h"
-	"src/application.cpp"
-	"src/renderer.h"
-	"src/renderer.cpp"
-	"src/utility.h"
-	"src/utility.cpp"
+	"${CMAKE_SOURCE_DIR}/src/main.cpp"
+	"${CMAKE_SOURCE_DIR}/src/application.h"
+	"${CMAKE_SOURCE_DIR}/src/application.cpp"
+	"${CMAKE_SOURCE_DIR}/src/renderer.h"
+	"${CMAKE_SOURCE_DIR}/src/renderer.cpp"
+	"${CMAKE_SOURCE_DIR}/src/utility.h"
+	"${CMAKE_SOURCE_DIR}/src/utility.cpp"
+	"${CMAKE_SOURCE_DIR}/external/tinygltf.cpp"
 )
 
 if (MSVC)
@@ -25,16 +26,14 @@ else()
 	target_compile_options(vulkanapp PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-	target_compile_options(vulkanapp PRIVATE -Wno-missing-designated-field-initializers)
-endif()
-
 target_link_libraries(vulkanapp PRIVATE
 	Vulkan::volk
 	Vulkan::shaderc_combined
 	SDL3::SDL3
 	glm::glm
 )
+
+target_include_directories(vulkanapp PRIVATE "${CMAKE_SOURCE_DIR}/external/")
 
 # Copy resources (shaders and assets) to build directory
 file(GLOB_RECURSE RUNTIME_RESOURCE_FILES CONFIGURE_DEPENDS
