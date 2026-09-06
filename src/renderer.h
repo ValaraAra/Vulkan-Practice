@@ -21,6 +21,27 @@ struct FrameResources
 	VkSemaphore imageAcquiredSemaphore{VK_NULL_HANDLE};
 };
 
+struct GPUImage
+{
+	VkImage image = VK_NULL_HANDLE;
+	VkImageView imageView = VK_NULL_HANDLE;
+	VmaAllocation allocation = nullptr;
+};
+
+struct GPUBuffer
+{
+	VkBuffer buffer = VK_NULL_HANDLE;
+	uint64_t deviceAddress = 0;
+	VmaAllocation allocation = nullptr;
+};
+
+struct RenderItem
+{
+	glm::mat4 wvp;
+	glm::mat4 worldMatrix;
+	uint32_t materialIndex = 0;
+};
+
 class RenderError : public std::runtime_error
 {
   public:
@@ -58,12 +79,25 @@ class Renderer
 	void createSyncResources();
 	void recreateImageAcquiredSemaphore(FrameResources& frameResource);
 	void createCommandBuffers();
+	VkCommandBuffer startTransientCommandBuffer();
+	void submitTransientCommandBuffer(VkCommandBuffer commandBuffer);
+	std::pair<uint32_t, GPUBuffer>
+	createImage(VkCommandBuffer commandBuffer, unsigned char* imageData, uint32_t width, uint32_t height, int channels);
+	GPUBuffer createBuffer(VkBufferUsageFlags usage, size_t byteSize, bool mappable, VmaMemoryUsage memoryUsage);
+	void mapCopyBufferData(const GPUBuffer& buffer, size_t bufferOffset, void* data, size_t byteSize);
+	void createFallbackTexture();
 
   private:
 	constexpr static uint32_t VulkanAPIVersion{VK_API_VERSION_1_4};
 	constexpr static uint32_t MaxFramesInFlight{2};
 	constexpr static VkFormat swapchainFormat{VK_FORMAT_B8G8R8A8_SRGB};
 	constexpr static VkFormat depthFormat{VK_FORMAT_D32_SFLOAT};
+
+	// Vertex buffer and index buffer budgets in bytes
+	constexpr static size_t vertexBufferBytes{64 * 1024 * 1024};
+	constexpr static size_t indexBufferBytes{32 * 1024 * 1024};
+	constexpr static size_t totalVertices{vertexBufferBytes / sizeof(Vertex)};
+	constexpr static size_t totalIndices{indexBufferBytes / sizeof(uint32_t)};
 
 	SDL_Window* window{nullptr};
 
@@ -101,4 +135,19 @@ class Renderer
 
 	VkSemaphore timelineSemaphore{VK_NULL_HANDLE};
 	std::array<FrameResources, MaxFramesInFlight> frameResources;
+
+	VkCommandPool transientCommandPool{VK_NULL_HANDLE};
+
+	std::vector<Vertex> sceneVertices = std::vector<Vertex>(totalVertices);
+	std::vector<uint32_t> sceneIndices = std::vector<uint32_t>(totalIndices);
+
+	uint32_t fallbackImageID = 0;
+	uint32_t vertexBufferID = 0;
+	uint32_t indexBufferID = 0;
+	uint32_t materialBufferID = 0;
+	std::vector<GPUImage> images;
+	std::vector<VkSampler> samplers;
+	std::vector<Texture> textures;
+	std::vector<GPUBuffer> buffers;
+	std::vector<Material> materials;
 };

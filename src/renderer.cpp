@@ -28,6 +28,7 @@ void Renderer::initialize(SDL_Window* sdlWindow)
 	pipeline = createGraphicsPipeline();
 	createSyncResources();
 	createCommandBuffers();
+	createFallbackTexture();
 }
 
 void Renderer::render()
@@ -288,6 +289,13 @@ void Renderer::shutdown()
 		vkDestroySemaphore(device, timelineSemaphore, nullptr);
 		timelineSemaphore = VK_NULL_HANDLE;
 	}
+
+	if (transientCommandPool)
+	{
+		vkDestroyCommandPool(device, transientCommandPool, nullptr);
+		transientCommandPool = VK_NULL_HANDLE;
+	}
+
 	for (FrameResources& frameResource : frameResources)
 	{
 		if (frameResource.imageAcquiredSemaphore)
@@ -1049,6 +1057,18 @@ void Renderer::recreateImageAcquiredSemaphore(FrameResources& frameResource)
 
 void Renderer::createCommandBuffers()
 {
+	// Transient command pool
+	VkCommandPoolCreateInfo transientPoolInfo{
+		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+		.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+		.queueFamilyIndex = graphicsQueueFamilyIndex,
+	};
+	if (vkCreateCommandPool(device, &transientPoolInfo, nullptr, &transientCommandPool) != VK_SUCCESS)
+	{
+		throw RenderError("Failed to create transient command pool.");
+	}
+
+	// Per-frame command pools/buffers
 	for (FrameResources& frameResource : frameResources)
 	{
 		// Create per-frame command pool
@@ -1073,4 +1093,257 @@ void Renderer::createCommandBuffers()
 			throw RenderError("Failed to allocate per-frame command buffer.");
 		}
 	}
+}
+
+VkCommandBuffer Renderer::startTransientCommandBuffer()
+{
+	// Allocate
+	VkCommandBufferAllocateInfo allocationInfo{
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		.commandPool = transientCommandPool,
+		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+		.commandBufferCount = 1,
+	};
+
+	VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+	if (vkAllocateCommandBuffers(device, &allocationInfo, &commandBuffer) != VK_SUCCESS)
+	{
+		throw RenderError("Failed to allocate transient command buffer.");
+	}
+
+	// Begin
+	VkCommandBufferBeginInfo beginInfo{
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+	};
+	if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS)
+	{
+		vkFreeCommandBuffers(device, transientCommandPool, 1, &commandBuffer);
+		throw RenderError("Failed to begin transient command buffer.");
+	}
+
+	return commandBuffer;
+}
+
+void Renderer::submitTransientCommandBuffer(VkCommandBuffer commandBuffer)
+{
+	// Finish recording commands
+	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) { throw RenderError("Failed to record transient command buffer."); }
+
+	// Submit the command buffer to the graphics queue (transfer queue eventually?)
+	VkCommandBufferSubmitInfo commandBufferSubmitInfo{
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+		.commandBuffer = commandBuffer,
+	};
+	VkSubmitInfo2 submitInfo{
+		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+		.commandBufferInfoCount = 1,
+		.pCommandBufferInfos = &commandBufferSubmitInfo,
+	};
+	if (vkQueueSubmit2(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
+	{
+		throw RenderError("Failed to submit transient command buffer.");
+	}
+	// Wait and clean up buffer (use better sync method eventually)
+	vkQueueWaitIdle(graphicsQueue);
+	vkFreeCommandBuffers(device, transientCommandPool, 1, &commandBuffer);
+}
+
+std::pair<uint32_t, GPUBuffer>
+Renderer::createImage(VkCommandBuffer commandBuffer, unsigned char* imageData, uint32_t width, uint32_t height, int channels)
+{
+	VkFormat imageFormat = VK_FORMAT_B8G8R8A8_SRGB;
+	VmaAllocationCreateInfo allocationInfo{.usage = VMA_MEMORY_USAGE_AUTO};
+	GPUImage gpuImage;
+
+	// Create image
+	VkImageCreateInfo imageInfo{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.format = imageFormat,
+		.extent{width, height, 1},
+		.mipLevels = 1,
+		.arrayLayers = 1,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+	};
+	if (vmaCreateImage(vmaAllocator, &imageInfo, &allocationInfo, &gpuImage.image, &gpuImage.allocation, nullptr)
+		!= VK_SUCCESS)
+	{
+		throw RenderError("Failed to create image.");
+	}
+
+	// Create image view
+	VkImageViewCreateInfo imageViewInfo{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		.image = gpuImage.image,
+		.viewType = VK_IMAGE_VIEW_TYPE_2D,
+		.format = imageFormat,
+		.subresourceRange{
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1
+		}
+	};
+	if (vkCreateImageView(device, &imageViewInfo, nullptr, &gpuImage.imageView) != VK_SUCCESS)
+	{
+		throw RenderError("Failed to create image view.");
+	}
+
+	// Transition image to transfer-DST
+	VkImageMemoryBarrier2 transferBarrier{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+		.srcAccessMask = VK_ACCESS_2_NONE,
+		.dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
+		.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+		.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		.image = gpuImage.image,
+		.subresourceRange{
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1
+		},
+	};
+	VkDependencyInfo transferDependencyInfo{
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.imageMemoryBarrierCount = 1,
+		.pImageMemoryBarriers = &transferBarrier,
+	};
+	vkCmdPipelineBarrier2(commandBuffer, &transferDependencyInfo);
+
+	// Create staging buffer and issue record copy operation
+	const size_t byteSize = width * height * channels;
+	GPUBuffer stagingBuffer =
+		createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, byteSize, true, VMA_MEMORY_USAGE_AUTO_PREFER_HOST);
+	mapCopyBufferData(stagingBuffer, 0, imageData, byteSize);
+
+	// Record command to make final copy to image in GPU memory
+	VkBufferImageCopy bufferImageCopy{
+		.imageSubresource =
+			{
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.mipLevel = 0,
+				.baseArrayLayer = 0,
+				.layerCount = 1,
+			},
+		.imageExtent = {width, height, 1},
+	};
+	vkCmdCopyBufferToImage(
+		commandBuffer, stagingBuffer.buffer, gpuImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferImageCopy
+	);
+
+	// Transition image for shader read/sampling
+	VkImageMemoryBarrier2 shaderReadBarrier{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
+		.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+		.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+		.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+		.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		.image = gpuImage.image,
+		.subresourceRange{
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1
+		},
+	};
+	VkDependencyInfo shaderReadDependencyInfo{
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.imageMemoryBarrierCount = 1,
+		.pImageMemoryBarriers = &shaderReadBarrier,
+	};
+	vkCmdPipelineBarrier2(commandBuffer, &shaderReadDependencyInfo);
+
+	images.push_back(gpuImage);
+
+	// Image ID is 1-based (0 is NULL, ID - 1 is index)
+	const uint32_t imageID = images.size();
+	return {imageID, stagingBuffer};
+}
+
+GPUBuffer Renderer::createBuffer(VkBufferUsageFlags usage, size_t byteSize, bool mappable, VmaMemoryUsage memoryUsage)
+{
+	GPUBuffer gpuBuffer;
+
+	// Create buffer and vma allocation
+	VkBufferCreateInfo bufferInfo{
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.size = byteSize,
+		.usage = usage,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+	};
+	VmaAllocationCreateInfo allocationInfo{
+		.flags = mappable ? VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT : 0u,
+		.usage = memoryUsage,
+	};
+	if (vmaCreateBuffer(vmaAllocator, &bufferInfo, &allocationInfo, &gpuBuffer.buffer, &gpuBuffer.allocation, nullptr)
+		!= VK_SUCCESS)
+	{
+		throw RenderError("Failed to create buffer.");
+	}
+
+	// BDA send device pointer
+	if (usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
+	{
+		VkBufferDeviceAddressInfo bdaInfo{
+			.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+			.buffer = gpuBuffer.buffer,
+		};
+		gpuBuffer.deviceAddress = vkGetBufferDeviceAddress(device, &bdaInfo);
+	}
+
+	return gpuBuffer;
+}
+
+void Renderer::mapCopyBufferData(const GPUBuffer& buffer, size_t bufferOffset, void* data, size_t byteSize)
+{
+	void* bufferPtr = nullptr;
+	if (vmaMapMemory(vmaAllocator, buffer.allocation, &bufferPtr) != VK_SUCCESS)
+	{
+		throw RenderError("Failed to map buffer memory.");
+	}
+
+	// Copy into the mapped range at given offset
+	std::memcpy(static_cast<char*>(bufferPtr) + bufferOffset, data, byteSize);
+
+	vmaUnmapMemory(vmaAllocator, buffer.allocation);
+}
+
+void Renderer::createFallbackTexture()
+{
+	// Fallback image
+	uint32_t whitePixelData = 0xFFFFFFFF;
+	Image whitePixel{
+		.width = 1,
+		.height = 1,
+		.channels = 4,
+		.data = reinterpret_cast<unsigned char*>(&whitePixelData),
+	};
+
+	VkCommandBuffer fallbackImageCommandBuffer = startTransientCommandBuffer();
+	auto [whitePixelID, whitePixelStagingBuffer] =
+		createImage(fallbackImageCommandBuffer, whitePixel.data, whitePixel.width, whitePixel.height, whitePixel.channels);
+	fallbackImageID = whitePixelID;
+	submitTransientCommandBuffer(fallbackImageCommandBuffer);
+	vmaDestroyBuffer(vmaAllocator, whitePixelStagingBuffer.buffer, whitePixelStagingBuffer.allocation);
+
+	// Fallback texture sampler
+	VkSamplerCreateInfo samplerInfo{
+		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		.magFilter = VK_FILTER_NEAREST,
+		.minFilter = VK_FILTER_NEAREST,
+		.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		.compareEnable = VK_FALSE,
+	};
+	VkSampler sampler = VK_NULL_HANDLE;
+	if (vkCreateSampler(device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS)
+	{
+		throw RenderError("Failed to create texture sampler.");
+	}
+
+	// Store sampler, get ID, store texture
+	samplers.push_back(sampler);
+	uint32_t fallbackSamplerID = samplers.size();
+	textures.push_back(Texture{.imageID = fallbackImageID, .samplerID = fallbackSamplerID});
 }
