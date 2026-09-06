@@ -36,6 +36,11 @@ target_link_libraries(vulkanapp PRIVATE
 
 target_include_directories(vulkanapp PRIVATE "${CMAKE_SOURCE_DIR}/external/")
 
+target_compile_definitions(vulkanapp PRIVATE
+	VK_NO_PROTOTYPES
+	GLM_FORCE_DEPTH_ZERO_TO_ONE
+)
+
 # Copy resources (shaders and assets) to build directory
 file(GLOB_RECURSE RUNTIME_RESOURCE_FILES CONFIGURE_DEPENDS
 	LIST_DIRECTORIES false

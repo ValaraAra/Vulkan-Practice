@@ -1,19 +1,18 @@
 #pragma once
 
-#include <stdexcept>
-#include <vector>
-#define VK_NO_PROTOTYPES
-#include <SDL3/SDL.h>
-#include <array>
-#include <cstdint>
-#include <shaderc/shaderc.hpp>
-#include <string>
-#include <vulkan/vulkan.h>
+#include "resources.h"
 
-struct VmaAllocator_T;
-typedef struct VmaAllocator_T* VmaAllocator;
-struct VmaAllocation_T;
-typedef struct VmaAllocation_T* VmaAllocation;
+#include <SDL3/SDL_vulkan.h>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <glm/glm.hpp>
+#include <shaderc/shaderc.hpp>
+#include <stdexcept>
+#include <string>
+#include <vector>
+#include <vma/vk_mem_alloc.h> // Would be best to forward declare instead, but fine for now
+#include <vulkan/vulkan.h>
 
 struct FrameResources
 {
@@ -49,7 +48,7 @@ class Renderer
 	void createSurface();
 	VkPhysicalDevice selectPhysicalDevice();
 	void selectGraphicsQueue();
-	void createDevice(VkPhysicalDevice physicalDevice);
+	void createDevice();
 	void initializeVMA();
 	void createSwapchain();
 	void destroySwapchain();
@@ -77,7 +76,7 @@ class Renderer
 	VkPhysicalDevice physicalDevice{VK_NULL_HANDLE};
 	VkDevice device{VK_NULL_HANDLE};
 	VkSurfaceKHR surface{VK_NULL_HANDLE};
-	VmaAllocator vmaAllocator{VK_NULL_HANDLE};
+	VmaAllocator vmaAllocator{nullptr};
 
 	uint32_t graphicsQueueFamilyIndex{UINT32_MAX};
 	VkQueue graphicsQueue{VK_NULL_HANDLE};
@@ -92,7 +91,7 @@ class Renderer
 
 	VkImage depthImage{VK_NULL_HANDLE};
 	VkImageView depthImageView{VK_NULL_HANDLE};
-	VmaAllocation depthImageAllocation{VK_NULL_HANDLE};
+	VmaAllocation depthImageAllocation{nullptr};
 
 	VkPipelineLayout pipelineLayout{VK_NULL_HANDLE};
 	VkPipeline pipeline{VK_NULL_HANDLE};

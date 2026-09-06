@@ -2,9 +2,8 @@
 
 #include "utility.h"
 
-#include <SDL3/SDL_vulkan.h>
+#include <cstring>
 #include <iostream>
-#include <vector>
 
 #define VOLK_IMPLEMENTATION
 #include <Volk/volk.h>
@@ -12,9 +11,9 @@
 #define VMA_IMPLEMENTATION
 #include <vma/vk_mem_alloc.h>
 
-void Renderer::initialize(SDL_Window* window)
+void Renderer::initialize(SDL_Window* sdlWindow)
 {
-	this->window = window;
+	window = sdlWindow;
 
 	if (volkInitialize() != VK_SUCCESS) { throw RenderError("Error initializing Volk."); }
 
@@ -22,7 +21,7 @@ void Renderer::initialize(SDL_Window* window)
 	createSurface();
 	physicalDevice = selectPhysicalDevice();
 	selectGraphicsQueue();
-	createDevice(physicalDevice);
+	createDevice();
 	initializeVMA();
 	createSwapchain();
 	createShaders();
@@ -334,7 +333,7 @@ void Renderer::shutdown()
 	if (vmaAllocator)
 	{
 		vmaDestroyAllocator(vmaAllocator);
-		vmaAllocator = VK_NULL_HANDLE;
+		vmaAllocator = nullptr;
 	}
 
 	if (surface)
@@ -534,7 +533,7 @@ void Renderer::selectGraphicsQueue()
 	throw RenderError("No suitable graphics queue found.");
 }
 
-void Renderer::createDevice(VkPhysicalDevice physicalDevice)
+void Renderer::createDevice()
 {
 	// Get supported features
 	VkPhysicalDeviceVulkan14Features supportedFeatures14{
