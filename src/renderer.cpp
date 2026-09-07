@@ -1285,7 +1285,7 @@ Renderer::createImage(VkCommandBuffer commandBuffer, unsigned char* imageData, u
 	images.push_back(gpuImage);
 
 	// Image ID is 1-based (0 is NULL, ID - 1 is index)
-	const uint32_t imageID = images.size();
+	const uint32_t imageID = static_cast<uint32_t>(images.size());
 	return {imageID, stagingBuffer};
 }
 
@@ -1373,7 +1373,7 @@ void Renderer::createFallbackTexture()
 
 	// Store sampler, get ID, store texture
 	samplers.push_back(sampler);
-	uint32_t fallbackSamplerID = samplers.size();
+	uint32_t fallbackSamplerID = static_cast<uint32_t>(samplers.size());
 	textures.push_back(Texture{.imageID = fallbackImageID, .samplerID = fallbackSamplerID});
 }
 
@@ -1389,7 +1389,8 @@ void Renderer::loadGLTF(const std::string& filepath)
 
 	tg3_parse_options_init(&modelOptions);
 	tg3_error_stack_init(&modelErrors);
-	tg3_error_code parseResult = tg3_parse_file(&model, &modelErrors, filepath.c_str(), filepath.size(), &modelOptions);
+	tg3_error_code parseResult =
+		tg3_parse_file(&model, &modelErrors, filepath.c_str(), static_cast<uint32_t>(filepath.size()), &modelOptions);
 
 	// Handle parse errors
 	if (parseResult != TG3_OK)
@@ -1445,19 +1446,19 @@ std::vector<Image> Renderer::loadImages(const tg3_model& model, const std::files
 	return loadedImages;
 }
 
-std::vector<uint32_t> Renderer::uploadImages(const std::vector<Image>& images)
+std::vector<uint32_t> Renderer::uploadImages(const std::vector<Image>& cpuImages)
 {
 	VkCommandBuffer commandBuffer = startTransientCommandBuffer();
 
 	std::vector<GPUBuffer> stagingBuffers;
-	stagingBuffers.reserve(images.size());
+	stagingBuffers.reserve(cpuImages.size());
 
-	std::vector<uint32_t> imageIDs(images.size(), fallbackImageID);
+	std::vector<uint32_t> imageIDs(cpuImages.size(), fallbackImageID);
 
 	// Upload images to GPU textures
-	for (uint32_t i = 0; i < images.size(); ++i)
+	for (uint32_t i = 0; i < cpuImages.size(); ++i)
 	{
-		const Image& image = images[i];
+		const Image& image = cpuImages[i];
 
 		if (image.data)
 		{
@@ -1529,7 +1530,7 @@ std::vector<uint32_t> Renderer::loadSamplers(const tg3_model& model)
 		else
 		{
 			samplers.push_back(sampler);
-			samplerIDs[i] = samplers.size();
+			samplerIDs[i] = static_cast<uint32_t>(samplers.size());
 		}
 	}
 
@@ -1553,7 +1554,7 @@ std::vector<uint32_t> Renderer::loadTextures(
 				.samplerID = samplerIDs[tg3Texture.sampler == -1 ? textures[0].samplerID : tg3Texture.sampler],
 			}
 		);
-		textureIDs[i] = textures.size();
+		textureIDs[i] = static_cast<uint32_t>(textures.size());
 	}
 
 	std::cout << std::format("Loaded {} textures.", textureIDs.size()) << std::endl;
@@ -1579,7 +1580,7 @@ std::vector<uint32_t> Renderer::loadMaterials(const tg3_model& model, const std:
 								 : 0,
 			}
 		);
-		materialIDs[i] = materials.size();
+		materialIDs[i] = static_cast<uint32_t>(materials.size());
 	}
 
 	std::cout << std::format("Loaded {} materials.", materialIDs.size()) << std::endl;
@@ -1704,7 +1705,7 @@ std::vector<uint32_t> Renderer::loadMeshes(const tg3_model& model, const std::ve
 		}
 
 		sceneMeshes.push_back(std::move(mesh));
-		meshIDs[i] = sceneMeshes.size();
+		meshIDs[i] = static_cast<uint32_t>(sceneMeshes.size());
 	}
 
 	std::cout << std::format("Loaded {} meshes.", meshIDs.size()) << std::endl;
