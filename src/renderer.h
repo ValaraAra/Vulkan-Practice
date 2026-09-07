@@ -95,9 +95,16 @@ class Renderer
 	std::vector<Image> loadImages(const tg3_model& model, const std::filesystem::path& imageDir);
 	std::vector<uint32_t> uploadImages(const std::vector<Image>& images);
 
+	std::vector<uint32_t> loadSamplers(const tg3_model& model);
+	std::vector<uint32_t>
+	loadTextures(const tg3_model& model, const std::vector<uint32_t>& imageIDs, const std::vector<uint32_t>& samplerIDs);
+	std::vector<uint32_t> loadMaterials(const tg3_model& model, const std::vector<uint32_t>& textureIDs);
+	std::vector<uint32_t> loadMeshes(const tg3_model& model, const std::vector<uint32_t>& materialIDs);
+
   private:
 	constexpr static uint32_t VulkanAPIVersion{VK_API_VERSION_1_4};
 	constexpr static uint32_t MaxFramesInFlight{2};
+	constexpr static size_t MaxTextures{1024};
 	constexpr static VkFormat swapchainFormat{VK_FORMAT_B8G8R8A8_SRGB};
 	constexpr static VkFormat depthFormat{VK_FORMAT_D32_SFLOAT};
 

@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <stb_image.h>
+#include <unordered_map>
 #include <vector>
 
 #define VOLK_IMPLEMENTATION
@@ -1414,6 +1415,12 @@ void Renderer::loadGLTF(const std::string& filepath)
 		stbi_image_free(image.data);
 	}
 
+	// Load samplers, textures, mats, and meshes
+	std::vector<uint32_t> modelSamplerIDs = loadSamplers(model);
+	std::vector<uint32_t> modelTextureIDs = loadTextures(model, modelImageIDs, modelSamplerIDs);
+	std::vector<uint32_t> modelMaterialIDs = loadMaterials(model, modelTextureIDs);
+	std::vector<uint32_t> modelMeshIDs = loadMeshes(model, modelMaterialIDs);
+
 	// Cleanup
 	tg3_model_free(&model);
 	throw RenderError("GLTF loading not fully implemented.");
@@ -1471,3 +1478,109 @@ std::vector<uint32_t> Renderer::uploadImages(const std::vector<Image>& images)
 
 	return imageIDs;
 }
+
+std::vector<uint32_t> Renderer::loadSamplers(const tg3_model& model)
+{
+	std::vector<uint32_t> samplerIDs(model.samplers_count);
+
+	for (uint32_t i = 0; i < model.samplers_count; ++i)
+	{
+		const tg3_sampler& tg3Sampler = model.samplers[i];
+
+		static const std::unordered_map<int32_t, std::tuple<VkFilter, VkSamplerMipmapMode, float>> filterMap{
+			{TG3_TEXTURE_FILTER_NEAREST, {VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, 0.25f}},
+			{TG3_TEXTURE_FILTER_LINEAR, {VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_NEAREST, 0.25f}},
+			{TG3_TEXTURE_FILTER_NEAREST_MIPMAP_NEAREST,
+			 {VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, VK_LOD_CLAMP_NONE}},
+			{TG3_TEXTURE_FILTER_NEAREST_MIPMAP_LINEAR,
+			 {VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_LINEAR, VK_LOD_CLAMP_NONE}},
+			{TG3_TEXTURE_FILTER_LINEAR_MIPMAP_NEAREST,
+			 {VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_NEAREST, VK_LOD_CLAMP_NONE}},
+			{TG3_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR, {VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, VK_LOD_CLAMP_NONE}},
+		};
+
+		static const std::unordered_map<int32_t, VkSamplerAddressMode> wrapMap{
+			{TG3_TEXTURE_WRAP_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT},
+			{TG3_TEXTURE_WRAP_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE},
+			{TG3_TEXTURE_WRAP_MIRRORED_REPEAT, VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT},
+		};
+
+		VkSamplerCreateInfo samplerInfo{
+			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+			.magFilter = (tg3Sampler.mag_filter == -1) ? VK_FILTER_LINEAR : std::get<0>(filterMap.at(tg3Sampler.mag_filter)),
+			.minFilter = (tg3Sampler.min_filter == -1) ? VK_FILTER_LINEAR : std::get<0>(filterMap.at(tg3Sampler.min_filter)),
+			.mipmapMode = (tg3Sampler.min_filter == -1) ? VK_SAMPLER_MIPMAP_MODE_LINEAR
+														: std::get<1>(filterMap.at(tg3Sampler.min_filter)),
+			.addressModeU = (tg3Sampler.wrap_s == -1) ? VK_SAMPLER_ADDRESS_MODE_REPEAT : wrapMap.at(tg3Sampler.wrap_s),
+			.addressModeV = (tg3Sampler.wrap_t == -1) ? VK_SAMPLER_ADDRESS_MODE_REPEAT : wrapMap.at(tg3Sampler.wrap_t),
+			.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+			.compareEnable = VK_FALSE,
+			.minLod = 0.0f,
+			.maxLod = (tg3Sampler.min_filter == -1) ? VK_LOD_CLAMP_NONE : std::get<2>(filterMap.at(tg3Sampler.min_filter)),
+		};
+
+		VkSampler sampler = VK_NULL_HANDLE;
+		if (vkCreateSampler(device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS)
+		{
+			std::cerr << "Failed to create texture sampler." << std::endl;
+			samplerIDs[i] = textures[0].samplerID;
+		}
+		else
+		{
+			samplers.push_back(sampler);
+			samplerIDs[i] = samplers.size();
+		}
+	}
+
+	return samplerIDs;
+}
+
+std::vector<uint32_t> Renderer::loadTextures(
+	const tg3_model& model, const std::vector<uint32_t>& imageIDs, const std::vector<uint32_t>& samplerIDs
+)
+{
+	assert(textures.size() + model.textures_count <= MaxTextures && "Exceeded max texture count!");
+
+	std::vector<uint32_t> textureIDs(model.textures_count);
+	for (uint32_t i = 0; i < model.textures_count; ++i)
+	{
+		const tg3_texture& tg3Texture = model.textures[i];
+		textures.push_back(
+			Texture{
+				.imageID = imageIDs[tg3Texture.source],
+				.samplerID = samplerIDs[tg3Texture.sampler == -1 ? textures[0].samplerID : tg3Texture.sampler],
+			}
+		);
+		textureIDs[i] = textures.size();
+	}
+
+	return textureIDs;
+}
+
+std::vector<uint32_t> Renderer::loadMaterials(const tg3_model& model, const std::vector<uint32_t>& textureIDs)
+{
+	std::vector<uint32_t> materialIDs(model.materials_count);
+	for (uint32_t i = 0; i < model.materials_count; ++i)
+	{
+		const tg3_material& tg3Material = model.materials[i];
+		materials.push_back(
+			Material{
+				.baseColor = glm::vec4(
+					tg3Material.pbr_metallic_roughness.base_color_factor[0],
+					tg3Material.pbr_metallic_roughness.base_color_factor[1],
+					tg3Material.pbr_metallic_roughness.base_color_factor[2],
+					tg3Material.pbr_metallic_roughness.base_color_factor[3]
+				),
+				.textureID = tg3Material.pbr_metallic_roughness.base_color_texture.index != -1
+								 ? textureIDs[tg3Material.pbr_metallic_roughness.base_color_texture.index]
+								 : 0,
+			}
+		);
+		materialIDs[i] = materials.size();
+	}
+
+	return materialIDs;
+}
+
+std::vector<uint32_t> Renderer::loadMeshes(const tg3_model& model, const std::vector<uint32_t>& materialIDs)
+{ throw RenderError("Mesh loading not implemented."); }
