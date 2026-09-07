@@ -2,8 +2,9 @@
 
 #include "utility.h"
 
-#include <cstring>
 #include <iostream>
+#include <stb_image.h>
+#include <vector>
 
 #define VOLK_IMPLEMENTATION
 #include <Volk/volk.h>
@@ -29,6 +30,12 @@ void Renderer::initialize(SDL_Window* sdlWindow)
 	createSyncResources();
 	createCommandBuffers();
 	createFallbackTexture();
+}
+
+void Renderer::loadData(const std::string& path)
+{
+	// Only a simple gltf model for now
+	loadGLTF(path);
 }
 
 void Renderer::render()
@@ -282,6 +289,27 @@ void Renderer::shutdown()
 {
 	// Flush GPU first (if device exists)
 	if (device) { vkDeviceWaitIdle(device); }
+
+	for (auto& image : images)
+	{
+		vkDestroyImageView(device, image.imageView, nullptr);
+		vkDestroyImage(device, image.image, nullptr);
+		vmaFreeMemory(vmaAllocator, image.allocation);
+	}
+	images.clear();
+
+	for (VkSampler sampler : samplers)
+	{
+		vkDestroySampler(device, sampler, nullptr);
+	}
+	samplers.clear();
+
+	for (auto& buffer : buffers)
+	{
+		vkDestroyBuffer(device, buffer.buffer, nullptr);
+		vmaFreeMemory(vmaAllocator, buffer.allocation);
+	}
+	buffers.clear();
 
 	// Frame/sync resources
 	if (timelineSemaphore)
@@ -1346,4 +1374,100 @@ void Renderer::createFallbackTexture()
 	samplers.push_back(sampler);
 	uint32_t fallbackSamplerID = samplers.size();
 	textures.push_back(Texture{.imageID = fallbackImageID, .samplerID = fallbackSamplerID});
+}
+
+void Renderer::loadGLTF(const std::string& filepath)
+{
+	if (!std::filesystem::exists(filepath)) { throw RenderError("GLTF file does not exists!"); }
+	std::cout << std::format("Loading GLTF: {}", filepath) << std::endl;
+
+	// Load and parse GLTF
+	tg3_model model;
+	tg3_parse_options modelOptions;
+	tg3_error_stack modelErrors;
+
+	tg3_parse_options_init(&modelOptions);
+	tg3_error_stack_init(&modelErrors);
+	tg3_error_code parseResult = tg3_parse_file(&model, &modelErrors, filepath.c_str(), filepath.size(), &modelOptions);
+
+	// Handle parse errors
+	if (parseResult != TG3_OK)
+	{
+		std::cerr << "GLTF parsing failed, errors found:" << std::endl;
+		for (uint32_t i = 0; i < modelErrors.count; ++i)
+		{
+			std::cerr << modelErrors.entries[i].message << std::endl;
+		}
+		tg3_error_stack_free(&modelErrors);
+		throw RenderError("GLTF parsing failed!");
+	}
+	tg3_error_stack_free(&modelErrors);
+
+	// Load images
+	std::filesystem::path modelDirectory = std::filesystem::path(filepath).parent_path();
+	std::vector<Image> modelImages = loadImages(model, modelDirectory);
+	std::vector<uint32_t> modelImageIDs = uploadImages(modelImages);
+
+	// Free stb image mem after VRAM upload
+	for (const Image& image : modelImages)
+	{
+		stbi_image_free(image.data);
+	}
+
+	// Cleanup
+	tg3_model_free(&model);
+	throw RenderError("GLTF loading not fully implemented.");
+}
+
+std::vector<Image> Renderer::loadImages(const tg3_model& model, const std::filesystem::path& imageDir)
+{
+	std::vector<Image> loadedImages(model.images_count);
+
+	for (uint32_t i = 0; i < model.images_count; ++i)
+	{
+		Image& image = loadedImages[i];
+		std::filesystem::path imagePath = imageDir / model.images[i].uri.data;
+
+		std::cout << std::format("Loading image {}/{}: {}", i + 1, model.images_count, model.images[i].uri.data)
+				  << std::endl;
+
+		image.data = stbi_load(imagePath.string().c_str(), &image.width, &image.height, &image.channels, 4);
+		if (!image.data) { throw RenderError("Failed to load image: " + imagePath.string()); }
+	}
+
+	return loadedImages;
+}
+
+std::vector<uint32_t> Renderer::uploadImages(const std::vector<Image>& images)
+{
+	VkCommandBuffer commandBuffer = startTransientCommandBuffer();
+
+	std::vector<GPUBuffer> stagingBuffers;
+	stagingBuffers.reserve(images.size());
+
+	std::vector<uint32_t> imageIDs(images.size(), fallbackImageID);
+
+	// Upload images to GPU textures
+	for (uint32_t i = 0; i < images.size(); ++i)
+	{
+		const Image& image = images[i];
+
+		if (image.data)
+		{
+			auto [imageID, imageStagingBuffer] = createImage(commandBuffer, image.data, image.width, image.height, 4);
+
+			imageIDs[i] = imageID;
+			stagingBuffers.push_back(imageStagingBuffer);
+		}
+	}
+
+	submitTransientCommandBuffer(commandBuffer);
+
+	// Cleanup staging buffers
+	for (const GPUBuffer& buffer : stagingBuffers)
+	{
+		vmaDestroyBuffer(vmaAllocator, buffer.buffer, buffer.allocation);
+	}
+
+	return imageIDs;
 }

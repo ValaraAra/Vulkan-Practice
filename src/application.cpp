@@ -1,5 +1,7 @@
 #include "application.h"
 
+#include <stdexcept>
+
 bool Application::initialize()
 {
 	// SDL initialization
@@ -25,6 +27,24 @@ bool Application::initialize()
 	catch (const RenderError& error)
 	{
 		showError("Renderer initialization failed!\n\n" + std::string(error.what()));
+		return false;
+	}
+
+	// Get Base Path
+	const char* rawPath = SDL_GetBasePath();
+	std::string basePath = rawPath ? rawPath : "";
+	if (basePath.empty()) { throw std::runtime_error("SDL failed to grab base path!"); }
+
+	// Load scene
+	try
+	{
+		const std::string helmetPath = basePath + "assets/models/gltf/gltf-sample-assets-damaged-helmet/DamagedHelmet.gltf";
+		const std::string sponzaPath = basePath + "assets/models/gltf/gltf-sample-assets-sponza/Sponza.gltf";
+		renderer.loadData(helmetPath);
+	}
+	catch (const RenderError& error)
+	{
+		showError("Scene loading failed!\n\n" + std::string(error.what()));
 		return false;
 	}
 

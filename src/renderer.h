@@ -6,10 +6,12 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <glm/glm.hpp>
 #include <shaderc/shaderc.hpp>
 #include <stdexcept>
 #include <string>
+#include <tiny_gltf_v3.h>
 #include <vector>
 #include <vma/vk_mem_alloc.h> // Would be best to forward declare instead, but fine for now
 #include <vulkan/vulkan.h>
@@ -52,6 +54,7 @@ class Renderer
 {
   public:
 	void initialize(SDL_Window* window);
+	void loadData(const std::string& path);
 	void render();
 	void shutdown();
 
@@ -86,6 +89,11 @@ class Renderer
 	GPUBuffer createBuffer(VkBufferUsageFlags usage, size_t byteSize, bool mappable, VmaMemoryUsage memoryUsage);
 	void mapCopyBufferData(const GPUBuffer& buffer, size_t bufferOffset, void* data, size_t byteSize);
 	void createFallbackTexture();
+
+	void loadGLTF(const std::string& filepath);
+
+	std::vector<Image> loadImages(const tg3_model& model, const std::filesystem::path& imageDir);
+	std::vector<uint32_t> uploadImages(const std::vector<Image>& images);
 
   private:
 	constexpr static uint32_t VulkanAPIVersion{VK_API_VERSION_1_4};
