@@ -1476,6 +1476,7 @@ std::vector<uint32_t> Renderer::uploadImages(const std::vector<Image>& images)
 		vmaDestroyBuffer(vmaAllocator, buffer.buffer, buffer.allocation);
 	}
 
+	std::cout << std::format("Uploaded {} images.", imageIDs.size()) << std::endl;
 	return imageIDs;
 }
 
@@ -1532,6 +1533,7 @@ std::vector<uint32_t> Renderer::loadSamplers(const tg3_model& model)
 		}
 	}
 
+	std::cout << std::format("Loaded {} samplers.", samplerIDs.size()) << std::endl;
 	return samplerIDs;
 }
 
@@ -1554,6 +1556,7 @@ std::vector<uint32_t> Renderer::loadTextures(
 		textureIDs[i] = textures.size();
 	}
 
+	std::cout << std::format("Loaded {} textures.", textureIDs.size()) << std::endl;
 	return textureIDs;
 }
 
@@ -1579,8 +1582,131 @@ std::vector<uint32_t> Renderer::loadMaterials(const tg3_model& model, const std:
 		materialIDs[i] = materials.size();
 	}
 
+	std::cout << std::format("Loaded {} materials.", materialIDs.size()) << std::endl;
 	return materialIDs;
 }
 
 std::vector<uint32_t> Renderer::loadMeshes(const tg3_model& model, const std::vector<uint32_t>& materialIDs)
-{ throw RenderError("Mesh loading not implemented."); }
+{
+	std::vector<uint32_t> meshIDs(model.meshes_count);
+
+	for (uint32_t i = 0; i < model.meshes_count; ++i)
+	{
+		Mesh mesh;
+		const tg3_mesh* tg3Mesh = &model.meshes[i];
+
+		// Copy name
+		mesh.name = tg3Mesh->name.data != nullptr ? tg3Mesh->name.data : "No Name";
+
+		// Asstribute data copy lambda
+		auto writeAttribute = [this, &model]<typename T>(T Vertex::* member, const tg3_str_int_pair* attr) {
+			const tg3_accessor* accessor = &model.accessors[attr->value];
+			const tg3_buffer_view* bufferView = &model.buffer_views[accessor->buffer_view];
+			const tg3_buffer* buffer = &model.buffers[bufferView->buffer];
+			const size_t bufferOffset = bufferView->byte_offset + accessor->byte_offset;
+			const size_t stride = bufferView->byte_stride != 0 ? bufferView->byte_stride : sizeof(T);
+
+			for (uint64_t j = 0; j < accessor->count; ++j)
+			{
+				const size_t elementOffset = bufferOffset + j * stride;
+				const float* data = reinterpret_cast<const float*>(buffer->data.data + elementOffset);
+
+				if constexpr (std::is_same<T, glm::vec3>())
+				{
+					sceneVertices[vertexOffset + j].*member = glm::vec3(data[0], data[1], data[2]);
+				}
+				else if constexpr (std::is_same<T, glm::vec2>())
+				{
+					sceneVertices[vertexOffset + j].*member = glm::vec2(data[0], data[1]);
+				}
+			}
+		};
+
+		// Copy vertex data
+		mesh.subMeshes.resize(tg3Mesh->primitives_count);
+		for (uint32_t j = 0; j < tg3Mesh->primitives_count; ++j)
+		{
+			const tg3_primitive* primitive = &tg3Mesh->primitives[j];
+			mesh.subMeshes[j].materialID = materialIDs[primitive->material];
+			mesh.subMeshes[j].vertexStart = vertexOffset;
+
+			for (uint32_t k = 0; k < primitive->attributes_count; ++k)
+			{
+				const tg3_str_int_pair* attr = &primitive->attributes[k];
+				if (strcmp(attr->key.data, "POSITION") == 0)
+				{
+					const tg3_accessor* accessor = &model.accessors[attr->value];
+
+					assert(accessor->type == TG3_TYPE_VEC3 && accessor->component_type == TG3_COMPONENT_TYPE_FLOAT);
+					assert(vertexOffset + accessor->count <= sceneVertices.size() && "Not enough space to load vertices");
+
+					mesh.subMeshes[j].vertexCount = accessor->count;
+					writeAttribute(&Vertex::position, attr);
+				}
+				else if (strcmp(attr->key.data, "NORMAL") == 0)
+				{
+					const tg3_accessor* accessor = &model.accessors[attr->value];
+					assert(accessor->type == TG3_TYPE_VEC3 && accessor->component_type == TG3_COMPONENT_TYPE_FLOAT);
+					writeAttribute(&Vertex::normal, attr);
+				}
+				else if (strcmp(attr->key.data, "COLOR_0") == 0)
+				{
+					const tg3_accessor* accessor = &model.accessors[attr->value];
+
+					assert(accessor->type == TG3_TYPE_VEC3 || accessor->type == TG3_TYPE_VEC4);
+					assert(accessor->component_type == TG3_COMPONENT_TYPE_FLOAT);
+
+					writeAttribute(&Vertex::color, attr);
+				}
+				else if (strcmp(attr->key.data, "TEXCOORD_0") == 0)
+				{
+					const tg3_accessor* accessor = &model.accessors[attr->value];
+
+					assert(accessor->type == TG3_TYPE_VEC2 && accessor->component_type == TG3_COMPONENT_TYPE_FLOAT);
+
+					writeAttribute(&Vertex::uv, attr);
+				}
+			}
+			vertexOffset += mesh.subMeshes[j].vertexCount;
+
+			// Copy index data
+			if (primitive->indices != -1)
+			{
+				const tg3_accessor* accessor = &model.accessors[primitive->indices];
+				const tg3_buffer_view* bufferView = &model.buffer_views[accessor->buffer_view];
+				const tg3_buffer* buffer = &model.buffers[bufferView->buffer];
+
+				assert(indexOffset + accessor->count <= sceneIndices.size() && "Not enough space for indices");
+
+				mesh.subMeshes[j].indexStart = indexOffset;
+				mesh.subMeshes[j].indexCount = accessor->count;
+
+				if (accessor->component_type == TG3_COMPONENT_TYPE_UNSIGNED_INT)
+				{
+					const uint32_t* buffData = reinterpret_cast<const uint32_t*>(
+						buffer->data.data + bufferView->byte_offset + accessor->byte_offset
+					);
+					memcpy(&sceneIndices[indexOffset], buffData, accessor->count * sizeof(uint32_t));
+				}
+				else if (accessor->component_type == TG3_COMPONENT_TYPE_UNSIGNED_SHORT)
+				{
+					const uint16_t* buffData = reinterpret_cast<const uint16_t*>(
+						buffer->data.data + bufferView->byte_offset + accessor->byte_offset
+					);
+					for (uint64_t k = 0; k < accessor->count; ++k)
+					{
+						sceneIndices[indexOffset + k] = static_cast<uint32_t>(buffData[k]);
+					}
+				}
+
+				indexOffset += mesh.subMeshes[j].indexCount;
+			}
+		}
+
+		sceneMeshes.push_back(std::move(mesh));
+		meshIDs[i] = sceneMeshes.size();
+	}
+
+	std::cout << std::format("Loaded {} meshes.", meshIDs.size()) << std::endl;
+	return meshIDs;
+}

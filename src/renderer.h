@@ -11,7 +11,7 @@
 #include <shaderc/shaderc.hpp>
 #include <stdexcept>
 #include <string>
-#include <tiny_gltf_v3.h>
+#include <tiny_gltf_v3.h> // Replace with fastgltf eventually?
 #include <vector>
 #include <vma/vk_mem_alloc.h> // Would be best to forward declare instead, but fine for now
 #include <vulkan/vulkan.h>
@@ -93,7 +93,7 @@ class Renderer
 	void loadGLTF(const std::string& filepath);
 
 	std::vector<Image> loadImages(const tg3_model& model, const std::filesystem::path& imageDir);
-	std::vector<uint32_t> uploadImages(const std::vector<Image>& images);
+	std::vector<uint32_t> uploadImages(const std::vector<Image>& cpuImages);
 
 	std::vector<uint32_t> loadSamplers(const tg3_model& model);
 	std::vector<uint32_t>
@@ -153,9 +153,14 @@ class Renderer
 
 	VkCommandPool transientCommandPool{VK_NULL_HANDLE};
 
+	// CPU resources
+	std::vector<Mesh> sceneMeshes;
 	std::vector<Vertex> sceneVertices = std::vector<Vertex>(totalVertices);
 	std::vector<uint32_t> sceneIndices = std::vector<uint32_t>(totalIndices);
+	size_t vertexOffset = 0;
+	size_t indexOffset = 0;
 
+	// GPU resources
 	uint32_t fallbackImageID = 0;
 	uint32_t vertexBufferID = 0;
 	uint32_t indexBufferID = 0;
