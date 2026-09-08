@@ -27,7 +27,7 @@ layout(buffer_reference, scalar) readonly buffer VertexPtr
 struct Material
 {
 	vec4 baseColor;
-	uint colorTextureIndex;
+	uint textureID;
 };
 
 layout(buffer_reference, scalar) readonly buffer MaterialPtr
@@ -69,6 +69,6 @@ void main()
 	outColor = vert.color;
 	outNormal = mat3x3(transpose(inverse(ri.worldMatrix))) * vert.normal;
 	outUV = vert.uv;
-	outTextureIndex = mat.colorTextureIndex;
+	outTextureIndex = mat.textureID == 0 ? 0 : mat.textureID - 1;;
 	outMaterialBaseColor = mat.baseColor;
 }

@@ -1364,7 +1364,7 @@ void Renderer::submitTransientCommandBuffer(VkCommandBuffer commandBuffer)
 std::pair<uint32_t, GPUBuffer>
 Renderer::createImage(VkCommandBuffer commandBuffer, unsigned char* imageData, uint32_t width, uint32_t height, int channels)
 {
-	VkFormat imageFormat = VK_FORMAT_B8G8R8A8_SRGB;
+	VkFormat imageFormat = VK_FORMAT_R8G8B8A8_SRGB;
 	VmaAllocationCreateInfo allocationInfo{.usage = VMA_MEMORY_USAGE_AUTO};
 	GPUImage gpuImage;
 
