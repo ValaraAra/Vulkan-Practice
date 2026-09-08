@@ -2,6 +2,7 @@
 
 #include "utility.h"
 
+#include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <stb_image.h>
 #include <unordered_map>
@@ -16,6 +17,9 @@
 void Renderer::initialize(SDL_Window* sdlWindow)
 {
 	window = sdlWindow;
+
+	scene.initialize(1024);
+	nodeRenderStack.reserve(128);
 
 	if (volkInitialize() != VK_SUCCESS) { throw RenderError("Error initializing Volk."); }
 
@@ -1422,9 +1426,31 @@ void Renderer::loadGLTF(const std::string& filepath)
 	std::vector<uint32_t> modelMaterialIDs = loadMaterials(model, modelTextureIDs);
 	std::vector<uint32_t> modelMeshIDs = loadMeshes(model, modelMaterialIDs);
 
+	// Import scene
+	const tg3_scene* tg3Scene = &model.scenes[model.default_scene != -1 ? model.default_scene : 0];
+
+	// Iterate root nodes, importing each node and its children
+	for (uint32_t i = 0; i < tg3Scene->nodes_count; ++i)
+	{
+		uint32_t nodeID = importNode(model, tg3Scene->nodes[i], 0, lastRootNodeID, modelMeshIDs);
+
+		// First root node
+		if (!rootNodeID)
+		{
+			rootNodeID = nodeID;
+			lastRootNodeID = nodeID;
+		}
+		else
+		{
+			lastRootNodeID = nodeID;
+		}
+	}
+
+	std::cout << std::format("Loaded {} nodes.", scene.size()) << std::endl;
+
 	// Cleanup
 	tg3_model_free(&model);
-	throw RenderError("GLTF loading not fully implemented.");
+	std::cout << "GLTF loaded successfully!" << std::endl;
 }
 
 std::vector<Image> Renderer::loadImages(const tg3_model& model, const std::filesystem::path& imageDir)
@@ -1710,4 +1736,58 @@ std::vector<uint32_t> Renderer::loadMeshes(const tg3_model& model, const std::ve
 
 	std::cout << std::format("Loaded {} meshes.", meshIDs.size()) << std::endl;
 	return meshIDs;
+}
+
+uint32_t Renderer::importNode(
+	const tg3_model& model, int32_t nodeIndex, uint32_t parentID, uint32_t previousSiblingID, std::vector<uint32_t>& meshIDs
+)
+{
+	const tg3_node& tg3Node = model.nodes[nodeIndex];
+
+	// Create new node and set parent ID
+	auto [node, nodeID] = scene.createNode();
+	node.parentID = parentID;
+
+	// Process transform
+	if (tg3Node.has_matrix)
+	{
+		glm::mat4 transform(1);
+		float* transformPointer = glm::value_ptr(transform);
+
+		for (int i = 0; i < 16; ++i)
+		{
+			transformPointer[i] = static_cast<float>(tg3Node.matrix[i]);
+		}
+
+		node.setTransform(transform);
+	}
+	else
+	{
+		glm::vec3 translation(tg3Node.translation[0], tg3Node.translation[1], tg3Node.translation[2]);
+		glm::quat rotation(tg3Node.rotation[3], tg3Node.rotation[0], tg3Node.rotation[1], tg3Node.rotation[2]);
+		glm::vec3 scale(tg3Node.scale[0], tg3Node.scale[1], tg3Node.scale[2]);
+
+		node.setTranslation(translation);
+		node.setRotation(rotation);
+		node.setScale(scale);
+	}
+
+	// Grab meshID if tg3node has valid mesh index
+	if (tg3Node.mesh != -1) { node.meshID = meshIDs[tg3Node.mesh]; }
+
+	// Link sibling nodes together
+	if (previousSiblingID) { scene.getNode(previousSiblingID).nextSiblingID = nodeID; }
+
+	// Iterate child nodes and recursively import
+	uint32_t lastChildID = 0;
+	for (uint32_t i = 0; i < tg3Node.children_count; ++i)
+	{
+		int32_t childIndex = tg3Node.children[i];
+		lastChildID = importNode(model, childIndex, nodeID, lastChildID, meshIDs);
+
+		// Set parent's first child ID
+		if (!node.firstChildID) { node.firstChildID = lastChildID; }
+	}
+
+	return nodeID;
 }

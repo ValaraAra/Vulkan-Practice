@@ -1,6 +1,7 @@
 #pragma once
 
 #include "resources.h"
+#include "scene.h"
 
 #include <SDL3/SDL_vulkan.h>
 #include <array>
@@ -8,10 +9,12 @@
 #include <cstdint>
 #include <filesystem>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <shaderc/shaderc.hpp>
 #include <stdexcept>
 #include <string>
 #include <tiny_gltf_v3.h> // Replace with fastgltf eventually?
+#include <utility>
 #include <vector>
 #include <vma/vk_mem_alloc.h> // Would be best to forward declare instead, but fine for now
 #include <vulkan/vulkan.h>
@@ -101,6 +104,14 @@ class Renderer
 	std::vector<uint32_t> loadMaterials(const tg3_model& model, const std::vector<uint32_t>& textureIDs);
 	std::vector<uint32_t> loadMeshes(const tg3_model& model, const std::vector<uint32_t>& materialIDs);
 
+	uint32_t importNode(
+		const tg3_model& model,
+		int32_t nodeIndex,
+		uint32_t parentID,
+		uint32_t previousSiblingID,
+		std::vector<uint32_t>& meshIDs
+	);
+
   private:
 	constexpr static uint32_t VulkanAPIVersion{VK_API_VERSION_1_4};
 	constexpr static uint32_t MaxFramesInFlight{2};
@@ -170,4 +181,10 @@ class Renderer
 	std::vector<Texture> textures;
 	std::vector<GPUBuffer> buffers;
 	std::vector<Material> materials;
+
+	// Scene data
+	Scene scene;
+	uint32_t rootNodeID = 0;
+	uint32_t lastRootNodeID = 0;
+	std::vector<std::pair<Node*, glm::mat4>> nodeRenderStack;
 };

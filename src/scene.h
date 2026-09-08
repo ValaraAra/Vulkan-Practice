@@ -100,6 +100,9 @@ class Scene
 		return nodes[nodeID - 1];
 	}
 
+	size_t size() const
+	{ return nodes.size(); }
+
   private:
 	std::vector<Node> nodes;
 	size_t maxNodes = 0;
