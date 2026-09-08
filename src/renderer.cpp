@@ -104,7 +104,7 @@ void Renderer::loadData(const std::string& path)
 	mapCopyBufferData(materialBuffer, 0, materials.data(), materialDataBytes);
 }
 
-void Renderer::render()
+void Renderer::render(const glm::mat4& viewProjectionMatrix)
 {
 	// Check swapchain validity
 	if (requireSwapchainRecreation)
@@ -152,6 +152,60 @@ void Renderer::render()
 	// Image acquired, increment frame index and timeline signal value
 	++frameIndex;
 	++nextSignalValue;
+
+	// Traverse scene and record MDI draw commands
+	nodeRenderStack.clear();
+	uint32_t nodeID = rootNodeID;
+	while (nodeID)
+	{
+		Node& node = scene.getNode(nodeID);
+		nodeRenderStack.push_back({&node, glm::mat4(1.0f)});
+		nodeID = node.nextSiblingID;
+	}
+
+	uint32_t drawIndex = 0;
+	while (!nodeRenderStack.empty())
+	{
+		auto [node, parentTransform] = nodeRenderStack.back();
+		nodeRenderStack.pop_back();
+		glm::mat4 worldMatrix = parentTransform * node->getTransform();
+
+		// Draw the nodes mesh! (if it has one)
+		if (node->meshID)
+		{
+			Mesh& mesh = sceneMeshes[node->meshID - 1];
+
+			for (SubMesh& subMesh : mesh.subMeshes)
+			{
+				// Indirect draw command
+				frameResource.indirectDrawPointer[drawIndex] = VkDrawIndexedIndirectCommand{
+					.indexCount = static_cast<uint32_t>(subMesh.indexCount),
+					.instanceCount = 1,
+					.firstIndex = static_cast<uint32_t>(subMesh.indexStart),
+					.vertexOffset = static_cast<int32_t>(subMesh.vertexStart),
+					.firstInstance = drawIndex,
+				};
+
+				// Per render-item data
+				frameResource.renderItemPointer[drawIndex] = RenderItem{
+					.wvp = viewProjectionMatrix * worldMatrix,
+					.worldMatrix = worldMatrix,
+					.materialIndex = subMesh.materialID - 1,
+				};
+
+				drawIndex++;
+			}
+		}
+
+		// Push children to stack for processing
+		uint32_t childNodeID = node->firstChildID;
+		while (childNodeID)
+		{
+			Node& child = scene.getNode(childNodeID);
+			nodeRenderStack.push_back({&child, worldMatrix});
+			nodeID = child.nextSiblingID;
+		}
+	}
 
 	// Begin recording commands into the command buffer for this frame resource
 	VkCommandBufferBeginInfo commandBufferBeginInfo{
@@ -233,15 +287,44 @@ void Renderer::render()
 		.pDepthAttachment = &depthAttachmentInfo,
 	};
 
+	// Setup frame data
+	vkCmdBindDescriptorSets(
+		frameResource.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &globalDescriptorSet, 0, nullptr
+	);
+
+	// Frame constants
+	FrameConstants frameConstants;
+	GPUBuffer& vertexBuffer = buffers[vertexBufferID - 1];
+	GPUBuffer& materialBuffer = buffers[materialBufferID - 1];
+	frameConstants.vertexBufferAddress = vertexBuffer.deviceAddress;
+	frameConstants.materialBufferAddress = materialBuffer.deviceAddress;
+	frameConstants.renderItemsBufferAddress = frameResource.renderItemBuffer.deviceAddress;
+
+	// Written immediately to cmd buffer
+	vkCmdPushConstants(
+		frameResource.commandBuffer,
+		pipelineLayout,
+		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+		0,
+		sizeof(FrameConstants),
+		&frameConstants
+	);
+
+	// Bind index buffer
+	GPUBuffer& indexBuffer = buffers[indexBufferID - 1];
+	vkCmdBindIndexBuffer(frameResource.commandBuffer, indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
 	// Begin dynamic rendering
 	vkCmdBeginRendering(frameResource.commandBuffer, &renderingInfo);
 	{
 		// Set the viewport dynamically
 		VkViewport viewport{
-			.x = 0.0f,
-			.y = 0.0f,
+			.x = 0,
+			.y = static_cast<float>(swapchainHeight),
 			.width = static_cast<float>(swapchainWidth),
-			.height = static_cast<float>(swapchainHeight),
+			.height = -static_cast<float>(swapchainHeight),
+			.minDepth = 0,
+			.maxDepth = 1,
 		};
 		vkCmdSetViewport(frameResource.commandBuffer, 0, 1, &viewport);
 
@@ -255,8 +338,14 @@ void Renderer::render()
 		// Bind the graphics pipeline
 		vkCmdBindPipeline(frameResource.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-		// Draw our first triangle!
-		vkCmdDraw(frameResource.commandBuffer, 3, 1, 0, 0);
+		// Draw everything!
+		vkCmdDrawIndexedIndirect(
+			frameResource.commandBuffer,
+			frameResource.indirectDrawBuffer.buffer,
+			0,
+			drawIndex,
+			sizeof(VkDrawIndexedIndirectCommand)
+		);
 	}
 	// End dynamic rendering
 	vkCmdEndRendering(frameResource.commandBuffer);
@@ -355,6 +444,10 @@ void Renderer::shutdown()
 {
 	// Flush GPU first (if device exists)
 	if (device) { vkDeviceWaitIdle(device); }
+
+	// Descriptor layouts and pool
+	if (globalDescriptorSetLayout) { vkDestroyDescriptorSetLayout(device, globalDescriptorSetLayout, nullptr); }
+	if (descriptorPool) { vkDestroyDescriptorPool(device, descriptorPool, nullptr); }
 
 	for (auto& image : images)
 	{

@@ -1,5 +1,7 @@
 #include "application.h"
 
+#include <cstdint>
+#include <glm/gtc/matrix_transform.hpp>
 #include <stdexcept>
 
 bool Application::initialize()
@@ -53,12 +55,16 @@ bool Application::initialize()
 
 void Application::run()
 {
-	running = true;
+	// Get key state and start time
+	const bool* keys = SDL_GetKeyboardState(nullptr);
+	uint64_t previousTime = SDL_GetTicks();
 
+	// Game loop
+	running = true;
 	while (running)
 	{
 		// Handle events
-		SDL_Event event;
+		SDL_Event event{0};
 		while (SDL_PollEvent(&event))
 		{
 			if (!handleEvent(event)) { break; }
@@ -77,10 +83,48 @@ void Application::run()
 			continue;
 		}
 
+		// Update time
+		uint64_t currentTime = SDL_GetTicks();
+		const float deltaTime = (currentTime - previousTime) / 1000.0f;
+		previousTime = currentTime;
+
+		// Handle keys
+		constexpr float speed = 1.0f;
+		constexpr float epsilon = 0.01f;
+		constexpr float pitchLimit = glm::half_pi<float>() - epsilon;
+
+		if (keys[SDL_SCANCODE_A]) { camYaw += speed * deltaTime; }
+		if (keys[SDL_SCANCODE_D]) { camYaw -= speed * deltaTime; }
+		if (keys[SDL_SCANCODE_W])
+		{
+			camPitch += speed * deltaTime;
+			camPitch = std::clamp(camPitch, -pitchLimit, pitchLimit);
+		}
+		if (keys[SDL_SCANCODE_S])
+		{
+			camPitch -= speed * deltaTime;
+			camPitch = std::clamp(camPitch, -pitchLimit, pitchLimit);
+		}
+		if (keys[SDL_SCANCODE_UP])
+		{
+			camDistance -= speed * deltaTime;
+			camDistance = std::max(camDistance, epsilon);
+		}
+		if (keys[SDL_SCANCODE_DOWN]) { camDistance += speed * deltaTime; }
+
+		// Update camera
+		glm::vec3 camPosition =
+			glm::vec3(std::cosf(camYaw) * cosf(camPitch), sinf(camPitch), sinf(camYaw) * cosf(camPitch)) * camDistance;
+
+		const float aspectRatio = windowWidth / static_cast<float>(windowHeight);
+		glm::mat4 viewMatrix = glm::lookAtRH(camPosition, glm::vec3(0), glm::vec3(0, 1, 0));
+		glm::mat4 projectionMatrix = glm::perspectiveRH(glm::radians(75.0f), aspectRatio, 0.01f, 1000.0f);
+		glm::mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
+
 		// Render
 		try
 		{
-			renderer.render();
+			renderer.render(viewProjectionMatrix);
 		}
 		catch (const RenderError& error)
 		{

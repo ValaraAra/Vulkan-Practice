@@ -3,6 +3,7 @@
 
 #include <SDL3/SDL.h>
 #include <cstdint>
+#include <glm/glm.hpp>
 
 class Application
 {
@@ -23,4 +24,9 @@ class Application
 	Renderer renderer;
 
 	bool running = false;
+
+	// Camera
+	float camDistance = 3;
+	float camYaw = glm::half_pi<float>();
+	float camPitch = 0;
 };

@@ -9,7 +9,6 @@
 #include <cstdint>
 #include <filesystem>
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 #include <shaderc/shaderc.hpp>
 #include <stdexcept>
 #include <string>
@@ -70,7 +69,7 @@ class Renderer
   public:
 	void initialize(SDL_Window* window);
 	void loadData(const std::string& path);
-	void render();
+	void render(const glm::mat4& viewProjectionMatrix);
 	void shutdown();
 
 	void invalidateSwapchain();
