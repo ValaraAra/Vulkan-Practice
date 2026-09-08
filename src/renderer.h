@@ -114,6 +114,7 @@ class Renderer
 
 	uint32_t addBuffer(const GPUBuffer& buffer);
 
+	void createDescriptorSets();
 	void updateTextureDescriptors();
 
   private:
@@ -185,6 +186,11 @@ class Renderer
 	std::vector<Texture> textures;
 	std::vector<GPUBuffer> buffers;
 	std::vector<Material> materials;
+
+	// Descriptors
+	VkDescriptorSetLayout globalDescriptorSetLayout{VK_NULL_HANDLE};
+	VkDescriptorSet globalDescriptorSet{VK_NULL_HANDLE};
+	VkDescriptorPool descriptorPool{VK_NULL_HANDLE};
 
 	// Scene data
 	Scene scene;

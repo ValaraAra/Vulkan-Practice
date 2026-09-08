@@ -2,12 +2,10 @@
 
 #include "utility.h"
 
-#include <cstdint>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <stb_image.h>
 #include <unordered_map>
-#include <vector>
 
 #define VOLK_IMPLEMENTATION
 #include <Volk/volk.h>
@@ -32,6 +30,7 @@ void Renderer::initialize(SDL_Window* sdlWindow)
 	initializeVMA();
 	createSwapchain();
 	createShaders();
+	createDescriptorSets();
 	pipeline = createGraphicsPipeline();
 	createSyncResources();
 	createCommandBuffers();
@@ -1859,5 +1858,91 @@ uint32_t Renderer::addBuffer(const GPUBuffer& buffer)
 	return static_cast<uint32_t>(buffers.size());
 }
 
+void Renderer::createDescriptorSets()
+{
+	// Descriptor pool
+	std::array<VkDescriptorPoolSize, 1> poolSizes{VkDescriptorPoolSize{
+		.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = MaxTextures,
+	}};
+
+	VkDescriptorPoolCreateInfo poolInfo{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+		.maxSets = 1,
+		.poolSizeCount = poolSizes.size(),
+		.pPoolSizes = poolSizes.data(),
+	};
+	if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
+	{
+		throw RenderError("Failed to create descriptor pool.");
+	}
+
+	// Descriptor set layout
+	std::array<VkDescriptorSetLayoutBinding, 1> bindings{VkDescriptorSetLayoutBinding{
+		.binding = 0,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = MaxTextures,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+	}};
+
+	std::array<VkDescriptorBindingFlags, 1> flags;
+	flags[0] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+
+	VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+		.bindingCount = flags.size(),
+		.pBindingFlags = flags.data(),
+	};
+
+	VkDescriptorSetLayoutCreateInfo layoutInfo{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		.pNext = &flagsInfo,
+		.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+		.bindingCount = bindings.size(),
+		.pBindings = bindings.data(),
+	};
+	if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &globalDescriptorSetLayout) != VK_SUCCESS)
+	{
+		throw RenderError("Failed to create descriptor set layout.");
+	}
+
+	// Descriptor sets
+	VkDescriptorSetAllocateInfo descriptorSetAllocationInfo{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.descriptorPool = descriptorPool,
+		.descriptorSetCount = 1,
+		.pSetLayouts = &globalDescriptorSetLayout,
+	};
+	if (vkAllocateDescriptorSets(device, &descriptorSetAllocationInfo, &globalDescriptorSet) != VK_SUCCESS)
+	{
+		throw RenderError("Failed to allocate descriptor set.");
+	}
+}
+
 void Renderer::updateTextureDescriptors()
-{ throw RenderError("Texture descriptors not implemented."); }
+{
+	std::vector<VkDescriptorImageInfo> imageDescriptors;
+	imageDescriptors.reserve(textures.size());
+
+	for (const Texture& texture : textures)
+	{
+		imageDescriptors.push_back(
+			{.sampler = samplers[texture.samplerID - 1],
+			 .imageView = images[texture.imageID - 1].imageView,
+			 .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}
+		);
+	}
+
+	VkWriteDescriptorSet descriptorSetWrite{
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = globalDescriptorSet,
+		.dstBinding = 0,
+		.dstArrayElement = 0,
+		.descriptorCount = static_cast<uint32_t>(imageDescriptors.size()),
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.pImageInfo = imageDescriptors.data()
+	};
+
+	vkUpdateDescriptorSets(device, 1, &descriptorSetWrite, 0, nullptr);
+}
