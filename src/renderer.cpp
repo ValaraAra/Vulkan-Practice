@@ -1809,8 +1809,26 @@ std::vector<uint32_t> Renderer::loadMeshes(const tg3_model& model, const std::ve
 			const tg3_accessor* accessor = &model.accessors[attr->value];
 			const tg3_buffer_view* bufferView = &model.buffer_views[accessor->buffer_view];
 			const tg3_buffer* buffer = &model.buffers[bufferView->buffer];
+
+			size_t componentCount;
+			switch (accessor->type)
+			{
+				case TG3_TYPE_VEC2: componentCount = 2; break;
+				case TG3_TYPE_VEC3: componentCount = 3; break;
+				case TG3_TYPE_VEC4: componentCount = 4; break;
+				default: throw RenderError("Unsupported mesh vertex attribute type!");
+			}
+
+			size_t componentSize;
+			switch (accessor->component_type)
+			{
+				case TG3_COMPONENT_TYPE_FLOAT: componentSize = sizeof(float); break;
+				default: throw RenderError("Unsupported mesh vertex attribute component type!");
+			}
+
 			const size_t bufferOffset = bufferView->byte_offset + accessor->byte_offset;
-			const size_t stride = bufferView->byte_stride != 0 ? bufferView->byte_stride : sizeof(T);
+			const size_t elementSize = componentCount * componentSize;
+			const size_t stride = bufferView->byte_stride != 0 ? bufferView->byte_stride : elementSize;
 
 			for (uint64_t j = 0; j < accessor->count; ++j)
 			{

@@ -10,6 +10,8 @@ BinPackArguments: false
 BinPackParameters: false
 AllowShortBlocksOnASingleLine: Always
 AllowShortFunctionsOnASingleLine: Empty
+AllowShortCaseLabelsOnASingleLine: true
+IndentCaseLabels: true
 AllowShortIfStatementsOnASingleLine: WithoutElse
 BreakTemplateDeclarations: Yes
 AlignAfterOpenBracket: BlockIndent
