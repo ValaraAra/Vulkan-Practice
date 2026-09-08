@@ -2,6 +2,7 @@
 
 #include "utility.h"
 
+#include <cstdint>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <stb_image.h>
@@ -37,10 +38,70 @@ void Renderer::initialize(SDL_Window* sdlWindow)
 	createFallbackTexture();
 }
 
+// Move asset loading out
 void Renderer::loadData(const std::string& path)
 {
-	// Only a simple gltf model for now
 	loadGLTF(path);
+
+	// Staging buffers
+	GPUBuffer vertexStagingBuffer =
+		createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, vertexBufferBytes, true, VMA_MEMORY_USAGE_AUTO);
+	if (!vertexStagingBuffer.buffer) { throw RenderError("Failed to create vertex staging buffer."); }
+
+	GPUBuffer indexStagingBuffer =
+		createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, indexBufferBytes, true, VMA_MEMORY_USAGE_AUTO);
+	if (!indexStagingBuffer.buffer) { throw RenderError("Failed to create index staging buffer."); }
+
+	// Device-local buffers
+	GPUBuffer vertexBuffer = createBuffer(
+		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		vertexBufferBytes,
+		false,
+		VMA_MEMORY_USAGE_AUTO
+	);
+	if (!vertexBuffer.buffer) { throw RenderError("Failed to create vertex buffer."); }
+
+	vertexBufferID = addBuffer(vertexBuffer);
+	mapCopyBufferData(vertexStagingBuffer, 0, sceneVertices.data(), vertexBufferBytes);
+
+	GPUBuffer indexBuffer = createBuffer(
+		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, indexBufferBytes, false, VMA_MEMORY_USAGE_AUTO
+	);
+	if (!indexBuffer.buffer) { throw RenderError("Failed to create index buffer."); }
+
+	indexBufferID = addBuffer(indexBuffer);
+	mapCopyBufferData(indexStagingBuffer, 0, sceneIndices.data(), indexBufferBytes);
+
+	// Copy staged data to VRAM
+	VkCommandBuffer geometryCommandBuffer = startTransientCommandBuffer();
+
+	VkBufferCopy bufferCopyVertices{.srcOffset = 0, .dstOffset = 0, .size = vertexBufferBytes};
+	vkCmdCopyBuffer(geometryCommandBuffer, vertexStagingBuffer.buffer, vertexBuffer.buffer, 1, &bufferCopyVertices);
+
+	VkBufferCopy bufferCopyIndices{.srcOffset = 0, .dstOffset = 0, .size = indexBufferBytes};
+	vkCmdCopyBuffer(geometryCommandBuffer, indexStagingBuffer.buffer, indexBuffer.buffer, 1, &bufferCopyIndices);
+
+	submitTransientCommandBuffer(geometryCommandBuffer);
+
+	// Staging cleanup
+	vmaDestroyBuffer(vmaAllocator, vertexStagingBuffer.buffer, vertexStagingBuffer.allocation);
+	vmaDestroyBuffer(vmaAllocator, indexStagingBuffer.buffer, indexStagingBuffer.allocation);
+
+	// Texture descriptors
+	updateTextureDescriptors();
+
+	// Material buffer
+	const size_t materialDataBytes = materials.size() * sizeof(Material);
+	GPUBuffer materialBuffer = createBuffer(
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		materialDataBytes,
+		true,
+		VMA_MEMORY_USAGE_AUTO
+	);
+	if (!materialBuffer.buffer) { throw RenderError("Failed to create material buffer."); }
+
+	materialBufferID = addBuffer(materialBuffer);
+	mapCopyBufferData(materialBuffer, 0, materials.data(), materialDataBytes);
 }
 
 void Renderer::render()
@@ -1791,3 +1852,12 @@ uint32_t Renderer::importNode(
 
 	return nodeID;
 }
+
+uint32_t Renderer::addBuffer(const GPUBuffer& buffer)
+{
+	buffers.push_back(buffer);
+	return static_cast<uint32_t>(buffers.size());
+}
+
+void Renderer::updateTextureDescriptors()
+{ throw RenderError("Texture descriptors not implemented."); }

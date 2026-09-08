@@ -112,6 +112,10 @@ class Renderer
 		std::vector<uint32_t>& meshIDs
 	);
 
+	uint32_t addBuffer(const GPUBuffer& buffer);
+
+	void updateTextureDescriptors();
+
   private:
 	constexpr static uint32_t VulkanAPIVersion{VK_API_VERSION_1_4};
 	constexpr static uint32_t MaxFramesInFlight{2};
