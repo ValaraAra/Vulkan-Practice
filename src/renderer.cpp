@@ -34,6 +34,7 @@ void Renderer::initialize(SDL_Window* sdlWindow)
 	pipeline = createGraphicsPipeline();
 	createSyncResources();
 	createCommandBuffers();
+	createIndirectDrawBuffers();
 	createFallbackTexture();
 }
 
@@ -402,6 +403,20 @@ void Renderer::shutdown()
 			vkDestroyCommandPool(device, frameResource.commandPool, nullptr);
 			frameResource.commandPool = VK_NULL_HANDLE;
 			frameResource.commandBuffer = VK_NULL_HANDLE;
+		}
+
+		if (frameResource.indirectDrawBuffer.buffer)
+		{
+			vmaUnmapMemory(vmaAllocator, frameResource.indirectDrawBuffer.allocation);
+			vkDestroyBuffer(device, frameResource.indirectDrawBuffer.buffer, nullptr);
+			vmaFreeMemory(vmaAllocator, frameResource.indirectDrawBuffer.allocation);
+		}
+
+		if (frameResource.renderItemBuffer.buffer)
+		{
+			vmaUnmapMemory(vmaAllocator, frameResource.renderItemBuffer.allocation);
+			vkDestroyBuffer(device, frameResource.renderItemBuffer.buffer, nullptr);
+			vmaFreeMemory(vmaAllocator, frameResource.renderItemBuffer.allocation);
 		}
 	}
 
@@ -971,11 +986,22 @@ void Renderer::createShaders()
 
 VkPipeline Renderer::createGraphicsPipeline()
 {
+	// Push constants
+	VkPushConstantRange pushConstantRange{
+		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+		.offset = 0,
+		.size = sizeof(FrameConstants),
+	};
+
+	std::array<VkDescriptorSetLayout, 1> descriptorSetLayouts{globalDescriptorSetLayout};
+
 	// Create pipeline layout
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = 0,
-		.pushConstantRangeCount = 0,
+		.setLayoutCount = descriptorSetLayouts.size(),
+		.pSetLayouts = descriptorSetLayouts.data(),
+		.pushConstantRangeCount = 1,
+		.pPushConstantRanges = &pushConstantRange,
 	};
 
 	if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
@@ -1907,7 +1933,7 @@ void Renderer::createDescriptorSets()
 		throw RenderError("Failed to create descriptor set layout.");
 	}
 
-	// Descriptor sets
+	// Descriptor sets (only 1 for now)
 	VkDescriptorSetAllocateInfo descriptorSetAllocationInfo{
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		.descriptorPool = descriptorPool,
@@ -1945,4 +1971,40 @@ void Renderer::updateTextureDescriptors()
 	};
 
 	vkUpdateDescriptorSets(device, 1, &descriptorSetWrite, 0, nullptr);
+}
+
+void Renderer::createIndirectDrawBuffers()
+{
+	for (auto& resource : frameResources)
+	{
+		// Create indirect draw buffer
+		const size_t indirectBufferByteSize = scene.getMaxNodes() * sizeof(VkDrawIndexedIndirectCommand);
+		resource.indirectDrawBuffer =
+			createBuffer(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, indirectBufferByteSize, true, VMA_MEMORY_USAGE_AUTO);
+
+		// Map indirect draw buffer
+		void* indirectBufferPointer = nullptr;
+		if (vmaMapMemory(vmaAllocator, resource.indirectDrawBuffer.allocation, &indirectBufferPointer) != VK_SUCCESS)
+		{
+			throw RenderError("Failed to map indirect draw buffer.");
+		}
+		resource.indirectDrawPointer = reinterpret_cast<VkDrawIndexedIndirectCommand*>(indirectBufferPointer);
+
+		// Create render item buffer (per-draw data)
+		const size_t renderItemBufferByteSize = scene.getMaxNodes() * sizeof(RenderItem);
+		resource.renderItemBuffer = createBuffer(
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			renderItemBufferByteSize,
+			true,
+			VMA_MEMORY_USAGE_AUTO
+		);
+
+		// Map render item buffer
+		void* renderItemBufferPointer = nullptr;
+		if (vmaMapMemory(vmaAllocator, resource.renderItemBuffer.allocation, &renderItemBufferPointer) != VK_SUCCESS)
+		{
+			throw RenderError("Failed to map render item buffer.");
+		}
+		resource.renderItemPointer = reinterpret_cast<RenderItem*>(renderItemBufferPointer);
+	}
 }

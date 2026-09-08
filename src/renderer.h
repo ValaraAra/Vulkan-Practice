@@ -19,13 +19,6 @@
 #include <vma/vk_mem_alloc.h> // Would be best to forward declare instead, but fine for now
 #include <vulkan/vulkan.h>
 
-struct FrameResources
-{
-	VkCommandPool commandPool{VK_NULL_HANDLE};
-	VkCommandBuffer commandBuffer{VK_NULL_HANDLE};
-	VkSemaphore imageAcquiredSemaphore{VK_NULL_HANDLE};
-};
-
 struct GPUImage
 {
 	VkImage image = VK_NULL_HANDLE;
@@ -45,6 +38,25 @@ struct RenderItem
 	glm::mat4 wvp;
 	glm::mat4 worldMatrix;
 	uint32_t materialIndex = 0;
+};
+
+struct FrameResources
+{
+	VkCommandPool commandPool{VK_NULL_HANDLE};
+	VkCommandBuffer commandBuffer{VK_NULL_HANDLE};
+	VkSemaphore imageAcquiredSemaphore{VK_NULL_HANDLE};
+	VkDescriptorSet descriptorSet{VK_NULL_HANDLE};
+	GPUBuffer indirectDrawBuffer;
+	GPUBuffer renderItemBuffer;
+	VkDrawIndexedIndirectCommand* indirectDrawPointer = nullptr;
+	RenderItem* renderItemPointer = nullptr;
+};
+
+struct FrameConstants
+{
+	uint64_t vertexBufferAddress = 0;
+	uint64_t materialBufferAddress = 0;
+	uint64_t renderItemsBufferAddress = 0;
 };
 
 class RenderError : public std::runtime_error
@@ -116,6 +128,8 @@ class Renderer
 
 	void createDescriptorSets();
 	void updateTextureDescriptors();
+
+	void createIndirectDrawBuffers();
 
   private:
 	constexpr static uint32_t VulkanAPIVersion{VK_API_VERSION_1_4};
