@@ -56,7 +56,7 @@ class Node
 	{
 		glm::vec3 skew;
 		glm::vec4 perspective;
-		glm::decompose(this->transform, scale, rotation, translation, skew, perspective);
+		glm::decompose(transform, scale, rotation, translation, skew, perspective);
 
 		this->transform = transform;
 		dirty = false;

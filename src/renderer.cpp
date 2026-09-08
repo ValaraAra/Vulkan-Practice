@@ -1577,7 +1577,7 @@ std::vector<uint32_t> Renderer::loadTextures(
 		textures.push_back(
 			Texture{
 				.imageID = imageIDs[tg3Texture.source],
-				.samplerID = samplerIDs[tg3Texture.sampler == -1 ? textures[0].samplerID : tg3Texture.sampler],
+				.samplerID = tg3Texture.sampler == -1 ? textures[0].samplerID : samplerIDs[tg3Texture.sampler],
 			}
 		);
 		textureIDs[i] = static_cast<uint32_t>(textures.size());
@@ -1625,7 +1625,7 @@ std::vector<uint32_t> Renderer::loadMeshes(const tg3_model& model, const std::ve
 		// Copy name
 		mesh.name = tg3Mesh->name.data != nullptr ? tg3Mesh->name.data : "No Name";
 
-		// Asstribute data copy lambda
+		// Attribute data copy lambda
 		auto writeAttribute = [this, &model]<typename T>(T Vertex::* member, const tg3_str_int_pair* attr) {
 			const tg3_accessor* accessor = &model.accessors[attr->value];
 			const tg3_buffer_view* bufferView = &model.buffer_views[accessor->buffer_view];
