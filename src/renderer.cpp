@@ -203,7 +203,7 @@ void Renderer::render(const glm::mat4& viewProjectionMatrix)
 		{
 			Node& child = scene.getNode(childNodeID);
 			nodeRenderStack.push_back({&child, worldMatrix});
-			nodeID = child.nextSiblingID;
+			childNodeID = child.nextSiblingID;
 		}
 	}
 
