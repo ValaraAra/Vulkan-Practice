@@ -4,6 +4,7 @@ project(VulkanPractice)
 find_package(SDL3 REQUIRED)
 find_package(Vulkan REQUIRED COMPONENTS volk shaderc_combined)
 find_package(glm REQUIRED)
+find_package(Tracy CONFIG REQUIRED)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -32,6 +33,7 @@ target_link_libraries(vulkanapp PRIVATE
 	Vulkan::shaderc_combined
 	SDL3::SDL3
 	glm::glm
+	Tracy::TracyClient
 )
 
 target_include_directories(vulkanapp PRIVATE "${CMAKE_SOURCE_DIR}/external/")

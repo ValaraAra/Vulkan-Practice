@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <glm/gtc/matrix_transform.hpp>
 #include <stdexcept>
+#include <tracy/Tracy.hpp>
 
 bool Application::initialize()
 {
@@ -133,6 +134,9 @@ void Application::run()
 			running = false;
 			break;
 		}
+
+		// Profile
+		FrameMark;
 	}
 }
 

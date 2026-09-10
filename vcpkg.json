@@ -9,6 +9,7 @@
 			"name": "sdl3",
 			"features": ["vulkan"]
 		},
-		"glm"
+		"glm",
+		"tracy"
 	]
 }
