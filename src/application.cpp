@@ -41,9 +41,7 @@ bool Application::initialize()
 	// Load scene
 	try
 	{
-		const std::string helmetPath = basePath + "assets/models/gltf/gltf-sample-assets-damaged-helmet/DamagedHelmet.gltf";
-		const std::string sponzaPath = basePath + "assets/models/gltf/gltf-sample-assets-sponza/Sponza.gltf";
-		renderer.loadData(helmetPath);
+		renderer.loadData(basePath + "assets/models/gltf/sponza/scene.gltf");
 	}
 	catch (const RenderError& error)
 	{
@@ -94,6 +92,11 @@ void Application::run()
 		constexpr float epsilon = 0.01f;
 		constexpr float pitchLimit = glm::half_pi<float>() - epsilon;
 
+		float zoomSpeed = speed;
+
+		if (keys[SDL_SCANCODE_LSHIFT]) { zoomSpeed *= 3.0f; }
+		if (keys[SDL_SCANCODE_RSHIFT]) { zoomSpeed *= 10.0f; }
+
 		if (keys[SDL_SCANCODE_A]) { camYaw += speed * deltaTime; }
 		if (keys[SDL_SCANCODE_D]) { camYaw -= speed * deltaTime; }
 		if (keys[SDL_SCANCODE_W])
@@ -108,10 +111,10 @@ void Application::run()
 		}
 		if (keys[SDL_SCANCODE_UP])
 		{
-			camDistance -= speed * deltaTime;
+			camDistance -= zoomSpeed * deltaTime;
 			camDistance = std::max(camDistance, epsilon);
 		}
-		if (keys[SDL_SCANCODE_DOWN]) { camDistance += speed * deltaTime; }
+		if (keys[SDL_SCANCODE_DOWN]) { camDistance += zoomSpeed * deltaTime; }
 
 		// Update camera
 		glm::vec3 camPosition =
