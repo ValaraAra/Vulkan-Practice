@@ -766,7 +766,7 @@ void Renderer::createDevice()
 		|| !supportedFeatures12.descriptorBindingSampledImageUpdateAfterBind
 		|| !supportedFeatures12.descriptorBindingPartiallyBound || !supportedFeatures12.runtimeDescriptorArray
 		|| !supportedFeatures12.shaderSampledImageArrayNonUniformIndexing || !supportedFeatures.features.shaderInt64
-		|| !supportedFeatures.features.multiDrawIndirect)
+		|| !supportedFeatures.features.multiDrawIndirect || !supportedFeatures.features.drawIndirectFirstInstance)
 	{
 		throw RenderError("Physical device does not support required features.");
 	}
@@ -799,6 +799,7 @@ void Renderer::createDevice()
 		.pNext = &enabledFeatures12,
 		.features{
 			.multiDrawIndirect = VK_TRUE,
+			.drawIndirectFirstInstance = VK_TRUE,
 			.shaderInt64 = VK_TRUE,
 		}
 	};
