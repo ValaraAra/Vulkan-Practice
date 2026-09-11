@@ -2,6 +2,7 @@
 
 #include "utility.h"
 
+#include <cstring>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <stb_image.h>
@@ -17,8 +18,10 @@ void Renderer::initialize(SDL_Window* sdlWindow)
 {
 	window = sdlWindow;
 
-	scene.initialize(1024);
+	scene.initialize(InitialDrawBufferSize);
 	nodeRenderStack.reserve(128);
+	stagedDrawCommands.reserve(InitialDrawBufferSize);
+	stagedRenderItems.reserve(InitialDrawBufferSize);
 
 	if (volkInitialize() != VK_SUCCESS) { throw RenderError("Error initializing Volk."); }
 
@@ -34,7 +37,12 @@ void Renderer::initialize(SDL_Window* sdlWindow)
 	pipeline = createGraphicsPipeline();
 	createSyncResources();
 	createCommandBuffers();
-	createIndirectDrawBuffers();
+
+	for (auto& resource : frameResources)
+	{
+		recreateFrameResourceDrawBuffers(resource, InitialDrawBufferSize);
+	}
+
 	createFallbackTexture();
 }
 
@@ -155,6 +163,9 @@ void Renderer::render(const glm::mat4& viewProjectionMatrix)
 
 	// Traverse scene and record MDI draw commands
 	nodeRenderStack.clear();
+	stagedDrawCommands.clear();
+	stagedRenderItems.clear();
+
 	uint32_t nodeID = rootNodeID;
 	while (nodeID)
 	{
@@ -163,7 +174,6 @@ void Renderer::render(const glm::mat4& viewProjectionMatrix)
 		nodeID = node.nextSiblingID;
 	}
 
-	uint32_t drawIndex = 0;
 	while (!nodeRenderStack.empty())
 	{
 		auto [node, parentTransform] = nodeRenderStack.back();
@@ -178,22 +188,24 @@ void Renderer::render(const glm::mat4& viewProjectionMatrix)
 			for (SubMesh& subMesh : mesh.subMeshes)
 			{
 				// Indirect draw command
-				frameResource.indirectDrawPointer[drawIndex] = VkDrawIndexedIndirectCommand{
-					.indexCount = static_cast<uint32_t>(subMesh.indexCount),
-					.instanceCount = 1,
-					.firstIndex = static_cast<uint32_t>(subMesh.indexStart),
-					.vertexOffset = static_cast<int32_t>(subMesh.vertexStart),
-					.firstInstance = drawIndex,
-				};
+				stagedDrawCommands.push_back(
+					VkDrawIndexedIndirectCommand{
+						.indexCount = static_cast<uint32_t>(subMesh.indexCount),
+						.instanceCount = 1,
+						.firstIndex = static_cast<uint32_t>(subMesh.indexStart),
+						.vertexOffset = static_cast<int32_t>(subMesh.vertexStart),
+						.firstInstance = static_cast<uint32_t>(stagedDrawCommands.size()),
+					}
+				);
 
 				// Per render-item data
-				frameResource.renderItemPointer[drawIndex] = RenderItem{
-					.wvp = viewProjectionMatrix * worldMatrix,
-					.worldMatrix = worldMatrix,
-					.materialIndex = subMesh.materialID - 1,
-				};
-
-				drawIndex++;
+				stagedRenderItems.push_back(
+					RenderItem{
+						.wvp = viewProjectionMatrix * worldMatrix,
+						.worldMatrix = worldMatrix,
+						.materialIndex = subMesh.materialID - 1,
+					}
+				);
 			}
 		}
 
@@ -206,6 +218,21 @@ void Renderer::render(const glm::mat4& viewProjectionMatrix)
 			childNodeID = child.nextSiblingID;
 		}
 	}
+
+	// Grow the draw buffers for this frame resource (if the scene outgrew them)
+	const size_t drawCount = stagedDrawCommands.size();
+	if (drawCount > frameResource.drawCapacity)
+	{
+		recreateFrameResourceDrawBuffers(
+			frameResource, std::max(drawCount + InitialDrawBufferSize, frameResource.drawCapacity * 2)
+		);
+	}
+
+	// Upload staged draws into the buffers for this frame resource
+	std::memcpy(
+		frameResource.indirectDrawPointer, stagedDrawCommands.data(), drawCount * sizeof(VkDrawIndexedIndirectCommand)
+	);
+	std::memcpy(frameResource.renderItemPointer, stagedRenderItems.data(), drawCount * sizeof(RenderItem));
 
 	// Begin recording commands into the command buffer for this frame resource
 	VkCommandBufferBeginInfo commandBufferBeginInfo{
@@ -343,7 +370,7 @@ void Renderer::render(const glm::mat4& viewProjectionMatrix)
 			frameResource.commandBuffer,
 			frameResource.indirectDrawBuffer.buffer,
 			0,
-			drawIndex,
+			static_cast<uint32_t>(drawCount),
 			sizeof(VkDrawIndexedIndirectCommand)
 		);
 	}
@@ -2085,38 +2112,53 @@ void Renderer::updateTextureDescriptors()
 	vkUpdateDescriptorSets(device, 1, &descriptorSetWrite, 0, nullptr);
 }
 
-void Renderer::createIndirectDrawBuffers()
+void Renderer::recreateFrameResourceDrawBuffers(FrameResources& resource, size_t size)
 {
-	for (auto& resource : frameResources)
+	// Unmap and destroy if buffers already exist
+	if (resource.indirectDrawBuffer.buffer)
 	{
-		// Create indirect draw buffer
-		const size_t indirectBufferByteSize = scene.getMaxNodes() * sizeof(VkDrawIndexedIndirectCommand);
-		resource.indirectDrawBuffer =
-			createBuffer(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, indirectBufferByteSize, true, VMA_MEMORY_USAGE_AUTO);
-
-		// Map indirect draw buffer
-		void* indirectBufferPointer = nullptr;
-		if (vmaMapMemory(vmaAllocator, resource.indirectDrawBuffer.allocation, &indirectBufferPointer) != VK_SUCCESS)
-		{
-			throw RenderError("Failed to map indirect draw buffer.");
-		}
-		resource.indirectDrawPointer = reinterpret_cast<VkDrawIndexedIndirectCommand*>(indirectBufferPointer);
-
-		// Create render item buffer (per-draw data)
-		const size_t renderItemBufferByteSize = scene.getMaxNodes() * sizeof(RenderItem);
-		resource.renderItemBuffer = createBuffer(
-			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-			renderItemBufferByteSize,
-			true,
-			VMA_MEMORY_USAGE_AUTO
-		);
-
-		// Map render item buffer
-		void* renderItemBufferPointer = nullptr;
-		if (vmaMapMemory(vmaAllocator, resource.renderItemBuffer.allocation, &renderItemBufferPointer) != VK_SUCCESS)
-		{
-			throw RenderError("Failed to map render item buffer.");
-		}
-		resource.renderItemPointer = reinterpret_cast<RenderItem*>(renderItemBufferPointer);
+		vmaUnmapMemory(vmaAllocator, resource.indirectDrawBuffer.allocation);
+		vkDestroyBuffer(device, resource.indirectDrawBuffer.buffer, nullptr);
+		vmaFreeMemory(vmaAllocator, resource.indirectDrawBuffer.allocation);
 	}
+
+	if (resource.renderItemBuffer.buffer)
+	{
+		vmaUnmapMemory(vmaAllocator, resource.renderItemBuffer.allocation);
+		vkDestroyBuffer(device, resource.renderItemBuffer.buffer, nullptr);
+		vmaFreeMemory(vmaAllocator, resource.renderItemBuffer.allocation);
+	}
+
+	// Set draw capacity
+	resource.drawCapacity = size;
+
+	// Create indirect draw buffer
+	const size_t indirectBufferByteSize = size * sizeof(VkDrawIndexedIndirectCommand);
+	resource.indirectDrawBuffer =
+		createBuffer(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, indirectBufferByteSize, true, VMA_MEMORY_USAGE_AUTO);
+
+	// Map indirect draw buffer
+	void* indirectBufferPointer = nullptr;
+	if (vmaMapMemory(vmaAllocator, resource.indirectDrawBuffer.allocation, &indirectBufferPointer) != VK_SUCCESS)
+	{
+		throw RenderError("Failed to map indirect draw buffer.");
+	}
+	resource.indirectDrawPointer = reinterpret_cast<VkDrawIndexedIndirectCommand*>(indirectBufferPointer);
+
+	// Create render item buffer (per-draw data)
+	const size_t renderItemBufferByteSize = size * sizeof(RenderItem);
+	resource.renderItemBuffer = createBuffer(
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		renderItemBufferByteSize,
+		true,
+		VMA_MEMORY_USAGE_AUTO
+	);
+
+	// Map render item buffer
+	void* renderItemBufferPointer = nullptr;
+	if (vmaMapMemory(vmaAllocator, resource.renderItemBuffer.allocation, &renderItemBufferPointer) != VK_SUCCESS)
+	{
+		throw RenderError("Failed to map render item buffer.");
+	}
+	resource.renderItemPointer = reinterpret_cast<RenderItem*>(renderItemBufferPointer);
 }

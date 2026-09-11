@@ -49,6 +49,7 @@ struct FrameResources
 	GPUBuffer renderItemBuffer;
 	VkDrawIndexedIndirectCommand* indirectDrawPointer = nullptr;
 	RenderItem* renderItemPointer = nullptr;
+	size_t drawCapacity = 0;
 };
 
 struct FrameConstants
@@ -128,12 +129,13 @@ class Renderer
 	void createDescriptorSets();
 	void updateTextureDescriptors();
 
-	void createIndirectDrawBuffers();
+	void recreateFrameResourceDrawBuffers(FrameResources& resource, size_t size);
 
   private:
 	constexpr static uint32_t VulkanAPIVersion{VK_API_VERSION_1_4};
 	constexpr static uint32_t MaxFramesInFlight{2};
 	constexpr static size_t MaxTextures{1024};
+	constexpr static size_t InitialDrawBufferSize{1024};
 	constexpr static VkFormat swapchainFormat{VK_FORMAT_B8G8R8A8_SRGB};
 	constexpr static VkFormat depthFormat{VK_FORMAT_D32_SFLOAT};
 
@@ -210,4 +212,6 @@ class Renderer
 	uint32_t rootNodeID = 0;
 	uint32_t lastRootNodeID = 0;
 	std::vector<std::pair<Node*, glm::mat4>> nodeRenderStack;
+	std::vector<VkDrawIndexedIndirectCommand> stagedDrawCommands;
+	std::vector<RenderItem> stagedRenderItems;
 };
