@@ -62,15 +62,20 @@ void Application::run()
 	running = true;
 	while (running)
 	{
+		ZoneScopedN("Tick");
+
 		// Handle events
 		SDL_Event event{0};
-		while (SDL_PollEvent(&event))
 		{
-			if (!handleEvent(event)) { break; }
-		}
+			ZoneScopedN("Events");
 
-		// Running flag may have changed
-		if (!running) { break; }
+			while (SDL_PollEvent(&event))
+			{
+				if (!handleEvent(event)) { break; }
+			}
+
+			if (!running) { break; }
+		}
 
 		// Skip rendering if the window doesn't have a valid size (minimized or resized to 0 width/height)
 		int windowWidth, windowHeight;
@@ -78,6 +83,7 @@ void Application::run()
 			|| (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED))
 		{
 			if (SDL_WaitEventTimeout(&event, 100)) { handleEvent(event); }
+			if (!running) { break; }
 
 			continue;
 		}
@@ -88,42 +94,52 @@ void Application::run()
 		previousTime = currentTime;
 
 		// Handle keys
-		constexpr float speed = 1.0f;
-		constexpr float epsilon = 0.01f;
-		constexpr float pitchLimit = glm::half_pi<float>() - epsilon;
-
-		float zoomSpeed = speed;
-
-		if (keys[SDL_SCANCODE_LSHIFT]) { zoomSpeed *= 3.0f; }
-		if (keys[SDL_SCANCODE_RSHIFT]) { zoomSpeed *= 10.0f; }
-
-		if (keys[SDL_SCANCODE_A]) { camYaw += speed * deltaTime; }
-		if (keys[SDL_SCANCODE_D]) { camYaw -= speed * deltaTime; }
-		if (keys[SDL_SCANCODE_W])
 		{
-			camPitch += speed * deltaTime;
-			camPitch = std::clamp(camPitch, -pitchLimit, pitchLimit);
+			ZoneScopedN("Keys");
+
+			constexpr float speed = 1.0f;
+			constexpr float epsilon = 0.01f;
+			constexpr float pitchLimit = glm::half_pi<float>() - epsilon;
+
+			float zoomSpeed = speed;
+
+			if (keys[SDL_SCANCODE_LSHIFT]) { zoomSpeed *= 3.0f; }
+			if (keys[SDL_SCANCODE_RSHIFT]) { zoomSpeed *= 10.0f; }
+
+			if (keys[SDL_SCANCODE_A]) { camYaw += speed * deltaTime; }
+			if (keys[SDL_SCANCODE_D]) { camYaw -= speed * deltaTime; }
+			if (keys[SDL_SCANCODE_W])
+			{
+				camPitch += speed * deltaTime;
+				camPitch = std::clamp(camPitch, -pitchLimit, pitchLimit);
+			}
+			if (keys[SDL_SCANCODE_S])
+			{
+				camPitch -= speed * deltaTime;
+				camPitch = std::clamp(camPitch, -pitchLimit, pitchLimit);
+			}
+			if (keys[SDL_SCANCODE_UP])
+			{
+				camDistance -= zoomSpeed * deltaTime;
+				camDistance = std::max(camDistance, epsilon);
+			}
+			if (keys[SDL_SCANCODE_DOWN]) { camDistance += zoomSpeed * deltaTime; }
 		}
-		if (keys[SDL_SCANCODE_S])
-		{
-			camPitch -= speed * deltaTime;
-			camPitch = std::clamp(camPitch, -pitchLimit, pitchLimit);
-		}
-		if (keys[SDL_SCANCODE_UP])
-		{
-			camDistance -= zoomSpeed * deltaTime;
-			camDistance = std::max(camDistance, epsilon);
-		}
-		if (keys[SDL_SCANCODE_DOWN]) { camDistance += zoomSpeed * deltaTime; }
 
 		// Update camera
-		glm::vec3 camPosition =
-			glm::vec3(std::cosf(camYaw) * cosf(camPitch), sinf(camPitch), sinf(camYaw) * cosf(camPitch)) * camDistance;
+		glm::mat4 viewProjectionMatrix;
+		{
+			ZoneScopedN("Camera");
 
-		const float aspectRatio = windowWidth / static_cast<float>(windowHeight);
-		glm::mat4 viewMatrix = glm::lookAtRH(camPosition, glm::vec3(0), glm::vec3(0, 1, 0));
-		glm::mat4 projectionMatrix = glm::perspectiveRH(glm::radians(75.0f), aspectRatio, 0.01f, 1000.0f);
-		glm::mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
+			glm::vec3 camPosition =
+				glm::vec3(std::cosf(camYaw) * cosf(camPitch), sinf(camPitch), sinf(camYaw) * cosf(camPitch)) * camDistance;
+
+			const float aspectRatio = windowWidth / static_cast<float>(windowHeight);
+
+			glm::mat4 viewMatrix = glm::lookAtRH(camPosition, glm::vec3(0), glm::vec3(0, 1, 0));
+			glm::mat4 projectionMatrix = glm::perspectiveRH(glm::radians(75.0f), aspectRatio, 0.01f, 1000.0f);
+			viewProjectionMatrix = projectionMatrix * viewMatrix;
+		}
 
 		// Render
 		try
