@@ -15,7 +15,7 @@ bool Application::initialize()
 	}
 
 	// SDL window creation
-	window = SDL_CreateWindow("Vulkan Practice", DEFAULT_WIDTH, DEFAULT_HEIGHT, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+	window = SDL_CreateWindow("Vulkan Renderer", DEFAULT_WIDTH, DEFAULT_HEIGHT, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 	if (!window)
 	{
 		showError("SDL window creation failed! " + std::string(SDL_GetError()));

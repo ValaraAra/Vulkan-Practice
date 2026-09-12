@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.28)
-project(VulkanPractice)
+project(VulkanRenderer)
 
 find_package(SDL3 REQUIRED)
 find_package(Vulkan REQUIRED COMPONENTS volk shaderc_combined)

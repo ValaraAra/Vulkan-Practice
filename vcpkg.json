@@ -1,8 +1,8 @@
 {
 	"$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
-	"name": "vulkan-practice",
+	"name": "vulkan-renderer",
 	"version": "0.0.1",
-	"description": "A vulkan rendering practice/learning project",
+	"description": "Exploring modern Vulkan 1.4 rendering.",
 	"builtin-baseline": "94a541197763a4f449a1b91478df48c0584a6256",
 	"dependencies": [
 		{

@@ -622,7 +622,7 @@ void Renderer::createVulkanInstance()
 	VkApplicationInfo applicationInfo{
 		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
 		.pNext = nullptr,
-		.pApplicationName = "Vulkan Practice",
+		.pApplicationName = "Vulkan Renderer",
 		.apiVersion = VulkanAPIVersion,
 	};
 
