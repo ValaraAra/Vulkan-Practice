@@ -1,0 +1,63 @@
+{
+	"version": 6,
+	"configurePresets": [
+		{
+			"name": "base",
+			"hidden": true,
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build",
+			"cacheVariables": {
+				"CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+				"CMAKE_BUILD_TYPE": "Debug"
+			}
+		},
+		{
+			"name": "tracy-off",
+			"inherits": "base",
+			"displayName": "Debug (Tracy OFF)",
+			"description": "Tracy disabled.",
+			"cacheVariables": {
+				"TRACY_ENABLE": "OFF"
+			}
+		},
+		{
+			"name": "tracy-on",
+			"inherits": "base",
+			"displayName": "Debug (Tracy ON)",
+			"description": "Tracy enabled.",
+			"cacheVariables": {
+				"TRACY_ENABLE": "ON"
+			}
+		}
+	],
+	"workflowPresets": [
+		{
+			"name": "tracy-off",
+			"displayName": "Debug (Tracy OFF)",
+			"steps": [
+				{ "type": "configure", "name": "tracy-off" },
+				{ "type": "build", "name": "tracy-off" }
+			]
+		},
+		{
+			"name": "tracy-on",
+			"displayName": "Debug (Tracy ON)",
+			"steps": [
+				{ "type": "configure", "name": "tracy-on" },
+				{ "type": "build", "name": "tracy-on" }
+			]
+		}
+	],
+	"buildPresets": [
+		{
+			"name": "tracy-off",
+			"displayName": "Debug (Tracy OFF)",
+			"configurePreset": "tracy-off"
+		},
+		{
+			"name": "tracy-on",
+			"displayName": "Debug (Tracy ON)",
+			"configurePreset": "tracy-on"
+		}
+	]
+}

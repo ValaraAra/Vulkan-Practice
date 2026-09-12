@@ -1,0 +1,21 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build (Tracy OFF)",
+			"type": "cmake",
+			"command": "workflow",
+			"preset": "tracy-off",
+			"group": "build",
+			"problemMatcher": ["$msCompile"]
+		},
+		{
+			"label": "Build (Tracy ON)",
+			"type": "cmake",
+			"command": "workflow",
+			"preset": "tracy-on",
+			"group": "build",
+			"problemMatcher": ["$msCompile"]
+		}
+	]
+}
