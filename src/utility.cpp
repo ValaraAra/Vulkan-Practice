@@ -4,7 +4,7 @@
 #include <sstream>
 
 // Returns empty string on file open failure.
-std::string readTextFile(const std::string& filePath)
+std::string readTextFile(const std::filesystem::path& filePath)
 {
 	std::ifstream file(filePath, std::ios::in | std::ios::binary);
 	if (!file) { return std::string(); }

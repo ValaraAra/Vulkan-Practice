@@ -69,7 +69,7 @@ class Renderer
 {
   public:
 	void initialize(SDL_Window* window);
-	void loadData(const std::string& path);
+	void loadData(const std::filesystem::path& path);
 	void render(const glm::mat4& viewProjectionMatrix);
 	void shutdown();
 
@@ -105,7 +105,7 @@ class Renderer
 	void mapCopyBufferData(const GPUBuffer& buffer, size_t bufferOffset, void* data, size_t byteSize);
 	void createFallbackTexture();
 
-	void loadGLTF(const std::string& filepath);
+	void loadGLTF(const std::filesystem::path& filepath);
 
 	std::vector<Image> loadImages(const tg3_model& model, const std::filesystem::path& imageDir);
 	std::vector<uint32_t> uploadImages(const std::vector<Image>& cpuImages);

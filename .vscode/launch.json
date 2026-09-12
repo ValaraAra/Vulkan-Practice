@@ -2,26 +2,11 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Debug (Tracy OFF)",
+			"name": "Current Preset",
 			"type": "cppvsdbg",
 			"request": "launch",
-			"program": "${workspaceFolder}/build/vulkanapp.exe",
-			"args": [],
-			"stopAtEntry": false,
-			"cwd": "${workspaceFolder}/build",
-			"environment": [],
-			"preLaunchTask": "Build (Tracy OFF)"
-		},
-		{
-			"name": "Debug (Tracy ON)",
-			"type": "cppvsdbg",
-			"request": "launch",
-			"program": "${workspaceFolder}/build/vulkanapp.exe",
-			"args": [],
-			"stopAtEntry": false,
-			"cwd": "${workspaceFolder}/build",
-			"environment": [],
-			"preLaunchTask": "Build (Tracy ON)"
+			"program": "${command:cmake.launchTargetPath}",
+			"cwd": "${command:cmake.launchTargetDirectory}"
 		}
 	]
 }

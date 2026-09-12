@@ -5,59 +5,36 @@
 			"name": "base",
 			"hidden": true,
 			"generator": "Ninja",
-			"binaryDir": "${sourceDir}/build",
-			"cacheVariables": {
-				"CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-				"CMAKE_BUILD_TYPE": "Debug"
-			}
+			"binaryDir": "${sourceDir}/build/${presetName}",
+			"toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+			"cacheVariables": { "CMAKE_EXPORT_COMPILE_COMMANDS": true }
 		},
 		{
-			"name": "tracy-off",
+			"name": "debug",
 			"inherits": "base",
-			"displayName": "Debug (Tracy OFF)",
-			"description": "Tracy disabled.",
-			"cacheVariables": {
-				"TRACY_ENABLE": "OFF"
-			}
+			"cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "COPY_RESOURCES": "OFF", "PROFILING": "ON", "PROFILING_ON_DEMAND": "ON" }
 		},
 		{
-			"name": "tracy-on",
+			"name": "profile",
 			"inherits": "base",
-			"displayName": "Debug (Tracy ON)",
-			"description": "Tracy enabled.",
-			"cacheVariables": {
-				"TRACY_ENABLE": "ON"
-			}
-		}
-	],
-	"workflowPresets": [
-		{
-			"name": "tracy-off",
-			"displayName": "Debug (Tracy OFF)",
-			"steps": [
-				{ "type": "configure", "name": "tracy-off" },
-				{ "type": "build", "name": "tracy-off" }
-			]
+			"cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo", "COPY_RESOURCES": "OFF", "PROFILING": "ON", "PROFILING_ON_DEMAND": "ON" }
 		},
 		{
-			"name": "tracy-on",
-			"displayName": "Debug (Tracy ON)",
-			"steps": [
-				{ "type": "configure", "name": "tracy-on" },
-				{ "type": "build", "name": "tracy-on" }
-			]
+			"name": "profile (full)",
+			"inherits": "base",
+			"binaryDir": "${sourceDir}/build/profile",
+			"cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo", "COPY_RESOURCES": "OFF", "PROFILING": "ON", "PROFILING_ON_DEMAND": "OFF" }
+		},
+		{
+			"name": "release",
+			"inherits": "base",
+			"cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "COPY_RESOURCES": "ON", "PROFILING": "OFF" }
 		}
 	],
 	"buildPresets": [
-		{
-			"name": "tracy-off",
-			"displayName": "Debug (Tracy OFF)",
-			"configurePreset": "tracy-off"
-		},
-		{
-			"name": "tracy-on",
-			"displayName": "Debug (Tracy ON)",
-			"configurePreset": "tracy-on"
-		}
+		{ "name": "debug", "configurePreset": "debug" },
+		{ "name": "profile", "configurePreset": "profile" },
+		{ "name": "profile (full)", "configurePreset": "profile (full)" },
+		{ "name": "release", "configurePreset": "release" }
 	]
 }

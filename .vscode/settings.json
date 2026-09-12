@@ -1,9 +1,15 @@
 {
 	// CMake
 	"cmake.useCMakePresets": "always",
+	"cmake.options.statusBarVisibility": "hidden",
+	"cmake.options.advanced": {
+		"configurePreset": { "statusBarVisibility": "visible" },
+		"build": { "statusBarVisibility": "visible" }
+	},
+
 	// Clangd
 	"clangd.arguments": [
-		"--compile-commands-dir=${workspaceFolder}/build",
+		"--compile-commands-dir=${workspaceFolder}/build/debug",
 		"--header-insertion=iwyu",
 		"--clang-tidy"
 	],

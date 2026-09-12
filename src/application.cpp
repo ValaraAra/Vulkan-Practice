@@ -33,15 +33,10 @@ bool Application::initialize()
 		return false;
 	}
 
-	// Get Base Path
-	const char* rawPath = SDL_GetBasePath();
-	std::string basePath = rawPath ? rawPath : "";
-	if (basePath.empty()) { throw std::runtime_error("SDL failed to grab base path!"); }
-
 	// Load scene
 	try
 	{
-		renderer.loadData(basePath + "assets/models/gltf/sponza/scene.gltf");
+		renderer.loadData(std::filesystem::path{ASSET_DIR} / "models/gltf/sponza/scene.gltf");
 	}
 	catch (const RenderError& error)
 	{

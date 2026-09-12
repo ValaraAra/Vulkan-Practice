@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <stb_image.h>
@@ -57,7 +58,7 @@ void Renderer::initialize(SDL_Window* sdlWindow)
 }
 
 // Move asset loading out
-void Renderer::loadData(const std::string& path)
+void Renderer::loadData(const std::filesystem::path& path)
 {
 	loadGLTF(path);
 
@@ -1101,7 +1102,7 @@ VkShaderModule Renderer::createShaderModule(const std::string& filename, shaderc
 	ZoneScopedN("Create Shader Module");
 
 	// Read shader source from file
-	std::string shaderPath = "shaders/" + filename;
+	const std::filesystem::path shaderPath = std::filesystem::path{SHADER_DIR} / filename;
 	std::string shaderSource = readTextFile(shaderPath);
 
 	if (shaderSource.empty()) { throw RenderError("Failed to read shader source for \"" + filename + "\"."); }
@@ -1656,12 +1657,14 @@ void Renderer::createFallbackTexture()
 	textures.push_back(Texture{.imageID = fallbackImageID, .samplerID = fallbackSamplerID});
 }
 
-void Renderer::loadGLTF(const std::string& filepath)
+void Renderer::loadGLTF(const std::filesystem::path& filepath)
 {
 	ZoneScopedN("Load GLTF");
 
 	if (!std::filesystem::exists(filepath)) { throw RenderError("GLTF file does not exists!"); }
-	std::cout << std::format("Loading GLTF: {}", filepath) << std::endl;
+
+	const std::string filepathString = filepath.string();
+	std::cout << std::format("Loading GLTF: {}", filepathString) << std::endl;
 
 	// Load and parse GLTF
 	tg3_model model;
@@ -1670,8 +1673,9 @@ void Renderer::loadGLTF(const std::string& filepath)
 
 	tg3_parse_options_init(&modelOptions);
 	tg3_error_stack_init(&modelErrors);
-	tg3_error_code parseResult =
-		tg3_parse_file(&model, &modelErrors, filepath.c_str(), static_cast<uint32_t>(filepath.size()), &modelOptions);
+	tg3_error_code parseResult = tg3_parse_file(
+		&model, &modelErrors, filepathString.c_str(), static_cast<uint32_t>(filepathString.size()), &modelOptions
+	);
 
 	// Handle parse errors
 	if (parseResult != TG3_OK)
@@ -1687,7 +1691,7 @@ void Renderer::loadGLTF(const std::string& filepath)
 	tg3_error_stack_free(&modelErrors);
 
 	// Load images
-	std::filesystem::path modelDirectory = std::filesystem::path(filepath).parent_path();
+	std::filesystem::path modelDirectory = filepath.parent_path();
 	std::vector<Image> modelImages = loadImages(model, modelDirectory);
 	std::vector<uint32_t> modelImageIDs = uploadImages(modelImages);
 
