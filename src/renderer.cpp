@@ -2,6 +2,8 @@
 
 #include "utility.h"
 
+#include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
@@ -17,6 +19,8 @@
 
 void Renderer::initialize(SDL_Window* sdlWindow)
 {
+	ZoneScopedN("Initialize");
+
 	window = sdlWindow;
 
 	scene.initialize(InitialDrawBufferSize);
@@ -27,7 +31,12 @@ void Renderer::initialize(SDL_Window* sdlWindow)
 	if (volkInitialize() != VK_SUCCESS) { throw RenderError("Error initializing Volk."); }
 
 	createVulkanInstance();
-	createSurface();
+
+	if (!SDL_Vulkan_CreateSurface(window, vulkanInstance, nullptr, &surface))
+	{
+		throw RenderError("Vulkan surface creation failed!\n\n" + std::string(SDL_GetError()));
+	}
+
 	physicalDevice = selectPhysicalDevice();
 	selectGraphicsQueue();
 	createDevice();
@@ -651,9 +660,9 @@ void Renderer::invalidateSwapchain()
 // Debug callback for Vulkan validation layers
 VKAPI_ATTR VkBool32 VKAPI_CALL Renderer::debugCallback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-	VkDebugUtilsMessageTypeFlagsEXT messageType,
+	VkDebugUtilsMessageTypeFlagsEXT,
 	const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-	void* pUserData
+	void*
 )
 {
 	if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
@@ -666,6 +675,8 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Renderer::debugCallback(
 
 void Renderer::createVulkanInstance()
 {
+	ZoneScopedN("Create VK Instance");
+
 	VkApplicationInfo applicationInfo{
 		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
 		.pNext = nullptr,
@@ -721,14 +732,6 @@ void Renderer::createVulkanInstance()
 	}
 }
 
-void Renderer::createSurface()
-{
-	if (!SDL_Vulkan_CreateSurface(window, vulkanInstance, nullptr, &surface))
-	{
-		throw RenderError("Vulkan surface creation failed!\n\n" + std::string(SDL_GetError()));
-	}
-}
-
 // Defaults to first device, but will try to find a discrete GPU if available.
 // - Replace with a more sophisticated selection algorithm at some point!
 VkPhysicalDevice Renderer::selectPhysicalDevice()
@@ -769,22 +772,8 @@ VkPhysicalDevice Renderer::selectPhysicalDevice()
 	std::vector<VkSurfaceFormatKHR> surfaceFormats(formatCount);
 	vkGetPhysicalDeviceSurfaceFormatsKHR(selectedDevice, surface, &formatCount, surfaceFormats.data());
 
-	bool formatSupported = false;
-	for (const VkSurfaceFormatKHR& surfaceFormat : surfaceFormats)
-	{
-		if (surfaceFormat.format == swapchainFormat)
-		{
-			formatSupported = true;
-			break;
-		}
-	}
-
-	if (!formatSupported)
-	{
-		throw RenderError(
-			"Requested swapchain format not supported by the selected physical device and surface combination."
-		);
-	}
+	bool formatSupported = std::ranges::contains(surfaceFormats, swapchainFormat, &VkSurfaceFormatKHR::format);
+	if (!formatSupported) { throw RenderError("Requested swapchain format not supported by the selected device."); }
 
 	return selectedDevice;
 }
@@ -818,6 +807,8 @@ void Renderer::selectGraphicsQueue()
 
 void Renderer::createDevice()
 {
+	ZoneScopedN("Create Device");
+
 	// Get supported features
 	VkPhysicalDeviceVulkan14Features supportedFeatures14{
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES, .pNext = nullptr
@@ -913,6 +904,8 @@ void Renderer::createDevice()
 
 void Renderer::initializeVMA()
 {
+	ZoneScopedN("Initialize VMA");
+
 	VmaVulkanFunctions vmaFunctionInfo{};
 	VmaAllocatorCreateInfo vmaAllocatorInfo{
 		.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
@@ -933,6 +926,8 @@ void Renderer::initializeVMA()
 
 void Renderer::createSwapchain()
 {
+	ZoneScopedN("Create Swapchain");
+
 	int width, height;
 	if (!SDL_GetWindowSizeInPixels(window, &width, &height)) { throw RenderError("Error getting window size."); }
 
@@ -1067,6 +1062,8 @@ void Renderer::createSwapchain()
 
 void Renderer::destroySwapchain()
 {
+	ZoneScopedN("Destroy Swapchain");
+
 	for (VkImageView imageView : swapchainImageViews)
 	{
 		if (imageView != VK_NULL_HANDLE) { vkDestroyImageView(device, imageView, nullptr); }
@@ -1101,6 +1098,8 @@ void Renderer::destroySwapchain()
 // Create a shader module from a GLSL shader file using shaderc
 VkShaderModule Renderer::createShaderModule(const std::string& filename, shaderc_shader_kind kind) const
 {
+	ZoneScopedN("Create Shader Module");
+
 	// Read shader source from file
 	std::string shaderPath = "shaders/" + filename;
 	std::string shaderSource = readTextFile(shaderPath);
@@ -1145,6 +1144,8 @@ VkShaderModule Renderer::createShaderModule(const std::string& filename, shaderc
 
 void Renderer::createShaders()
 {
+	ZoneScopedN("Create Shaders");
+
 	// Vertex shader
 	vertShader = createShaderModule("shader.vert", shaderc_vertex_shader);
 
@@ -1154,6 +1155,8 @@ void Renderer::createShaders()
 
 VkPipeline Renderer::createGraphicsPipeline()
 {
+	ZoneScopedN("Create Graphics Pipeline");
+
 	// Push constants
 	VkPushConstantRange pushConstantRange{
 		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -1166,7 +1169,7 @@ VkPipeline Renderer::createGraphicsPipeline()
 	// Create pipeline layout
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = descriptorSetLayouts.size(),
+		.setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size()),
 		.pSetLayouts = descriptorSetLayouts.data(),
 		.pushConstantRangeCount = 1,
 		.pPushConstantRanges = &pushConstantRange,
@@ -1297,6 +1300,8 @@ VkPipeline Renderer::createGraphicsPipeline()
 
 void Renderer::createSyncResources()
 {
+	ZoneScopedN("Create Sync Resources");
+
 	// Create timeline semaphore
 	VkSemaphoreTypeCreateInfo timelineSemaphoreInfo{
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
@@ -1328,6 +1333,8 @@ void Renderer::createSyncResources()
 
 void Renderer::recreateImageAcquiredSemaphore(FrameResources& frameResource)
 {
+	ZoneScopedN("Recreate Image Acquired Semaphore");
+
 	// Destroy existing semaphore
 	vkDestroySemaphore(device, frameResource.imageAcquiredSemaphore, nullptr);
 	frameResource.imageAcquiredSemaphore = VK_NULL_HANDLE;
@@ -1344,6 +1351,8 @@ void Renderer::recreateImageAcquiredSemaphore(FrameResources& frameResource)
 
 void Renderer::createCommandBuffers()
 {
+	ZoneScopedN("Create Command Buffers");
+
 	// Transient command pool
 	VkCommandPoolCreateInfo transientPoolInfo{
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -1384,6 +1393,8 @@ void Renderer::createCommandBuffers()
 
 VkCommandBuffer Renderer::startTransientCommandBuffer()
 {
+	ZoneScopedN("Start Transient Command Buffer");
+
 	// Allocate
 	VkCommandBufferAllocateInfo allocationInfo{
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -1414,6 +1425,8 @@ VkCommandBuffer Renderer::startTransientCommandBuffer()
 
 void Renderer::submitTransientCommandBuffer(VkCommandBuffer commandBuffer)
 {
+	ZoneScopedN("Submit Transient Command Buffer");
+
 	// Finish recording commands
 	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) { throw RenderError("Failed to record transient command buffer."); }
 
@@ -1439,6 +1452,8 @@ void Renderer::submitTransientCommandBuffer(VkCommandBuffer commandBuffer)
 std::pair<uint32_t, GPUBuffer>
 Renderer::createImage(VkCommandBuffer commandBuffer, unsigned char* imageData, uint32_t width, uint32_t height, int channels)
 {
+	ZoneScopedN("Create Image");
+
 	VkFormat imageFormat = VK_FORMAT_R8G8B8A8_SRGB;
 	VmaAllocationCreateInfo allocationInfo{.usage = VMA_MEMORY_USAGE_AUTO};
 	GPUImage gpuImage;
@@ -1549,6 +1564,8 @@ Renderer::createImage(VkCommandBuffer commandBuffer, unsigned char* imageData, u
 
 GPUBuffer Renderer::createBuffer(VkBufferUsageFlags usage, size_t byteSize, bool mappable, VmaMemoryUsage memoryUsage)
 {
+	ZoneScopedN("Create GPUBuffer");
+
 	GPUBuffer gpuBuffer;
 
 	// Create buffer and vma allocation
@@ -1583,6 +1600,8 @@ GPUBuffer Renderer::createBuffer(VkBufferUsageFlags usage, size_t byteSize, bool
 
 void Renderer::mapCopyBufferData(const GPUBuffer& buffer, size_t bufferOffset, void* data, size_t byteSize)
 {
+	ZoneScopedN("Map Copy Buffer Data");
+
 	void* bufferPtr = nullptr;
 	if (vmaMapMemory(vmaAllocator, buffer.allocation, &bufferPtr) != VK_SUCCESS)
 	{
@@ -1597,6 +1616,8 @@ void Renderer::mapCopyBufferData(const GPUBuffer& buffer, size_t bufferOffset, v
 
 void Renderer::createFallbackTexture()
 {
+	ZoneScopedN("Create Fallback Texture");
+
 	// Fallback image
 	uint32_t whitePixelData = 0xFFFFFFFF;
 	Image whitePixel{
@@ -1637,6 +1658,8 @@ void Renderer::createFallbackTexture()
 
 void Renderer::loadGLTF(const std::string& filepath)
 {
+	ZoneScopedN("Load GLTF");
+
 	if (!std::filesystem::exists(filepath)) { throw RenderError("GLTF file does not exists!"); }
 	std::cout << std::format("Loading GLTF: {}", filepath) << std::endl;
 
@@ -1709,6 +1732,8 @@ void Renderer::loadGLTF(const std::string& filepath)
 
 std::vector<Image> Renderer::loadImages(const tg3_model& model, const std::filesystem::path& imageDir)
 {
+	ZoneScopedN("Load Images");
+
 	std::vector<Image> loadedImages(model.images_count);
 
 	for (uint32_t i = 0; i < model.images_count; ++i)
@@ -1728,6 +1753,8 @@ std::vector<Image> Renderer::loadImages(const tg3_model& model, const std::files
 
 std::vector<uint32_t> Renderer::uploadImages(const std::vector<Image>& cpuImages)
 {
+	ZoneScopedN("Upload Images");
+
 	VkCommandBuffer commandBuffer = startTransientCommandBuffer();
 
 	std::vector<GPUBuffer> stagingBuffers;
@@ -1763,6 +1790,8 @@ std::vector<uint32_t> Renderer::uploadImages(const std::vector<Image>& cpuImages
 
 std::vector<uint32_t> Renderer::loadSamplers(const tg3_model& model)
 {
+	ZoneScopedN("Load Samplers");
+
 	std::vector<uint32_t> samplerIDs(model.samplers_count);
 
 	for (uint32_t i = 0; i < model.samplers_count; ++i)
@@ -1822,6 +1851,8 @@ std::vector<uint32_t> Renderer::loadTextures(
 	const tg3_model& model, const std::vector<uint32_t>& imageIDs, const std::vector<uint32_t>& samplerIDs
 )
 {
+	ZoneScopedN("Load Textures");
+
 	assert(textures.size() + model.textures_count <= MaxTextures && "Exceeded max texture count!");
 
 	std::vector<uint32_t> textureIDs(model.textures_count);
@@ -1843,6 +1874,8 @@ std::vector<uint32_t> Renderer::loadTextures(
 
 std::vector<uint32_t> Renderer::loadMaterials(const tg3_model& model, const std::vector<uint32_t>& textureIDs)
 {
+	ZoneScopedN("Load Materials");
+
 	std::vector<uint32_t> materialIDs(model.materials_count);
 	for (uint32_t i = 0; i < model.materials_count; ++i)
 	{
@@ -1869,6 +1902,8 @@ std::vector<uint32_t> Renderer::loadMaterials(const tg3_model& model, const std:
 
 std::vector<uint32_t> Renderer::loadMeshes(const tg3_model& model, const std::vector<uint32_t>& materialIDs)
 {
+	ZoneScopedN("Load Meshes");
+
 	std::vector<uint32_t> meshIDs(model.meshes_count);
 
 	for (uint32_t i = 0; i < model.meshes_count; ++i)
@@ -2035,9 +2070,20 @@ uint32_t Renderer::importNode(
 	}
 	else
 	{
-		glm::vec3 translation(tg3Node.translation[0], tg3Node.translation[1], tg3Node.translation[2]);
-		glm::quat rotation(tg3Node.rotation[3], tg3Node.rotation[0], tg3Node.rotation[1], tg3Node.rotation[2]);
-		glm::vec3 scale(tg3Node.scale[0], tg3Node.scale[1], tg3Node.scale[2]);
+		glm::vec3 translation(
+			static_cast<float>(tg3Node.translation[0]),
+			static_cast<float>(tg3Node.translation[1]),
+			static_cast<float>(tg3Node.translation[2])
+		);
+		glm::quat rotation(
+			static_cast<float>(tg3Node.rotation[3]),
+			static_cast<float>(tg3Node.rotation[0]),
+			static_cast<float>(tg3Node.rotation[1]),
+			static_cast<float>(tg3Node.rotation[2])
+		);
+		glm::vec3 scale(
+			static_cast<float>(tg3Node.scale[0]), static_cast<float>(tg3Node.scale[1]), static_cast<float>(tg3Node.scale[2])
+		);
 
 		node.setTranslation(translation);
 		node.setRotation(rotation);
@@ -2072,6 +2118,8 @@ uint32_t Renderer::addBuffer(const GPUBuffer& buffer)
 
 void Renderer::createDescriptorSets()
 {
+	ZoneScopedN("Create Descriptor Sets");
+
 	// Descriptor pool
 	std::array<VkDescriptorPoolSize, 1> poolSizes{VkDescriptorPoolSize{
 		.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -2082,7 +2130,7 @@ void Renderer::createDescriptorSets()
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
 		.maxSets = 1,
-		.poolSizeCount = poolSizes.size(),
+		.poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
 		.pPoolSizes = poolSizes.data(),
 	};
 	if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
@@ -2103,7 +2151,7 @@ void Renderer::createDescriptorSets()
 
 	VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-		.bindingCount = flags.size(),
+		.bindingCount = static_cast<uint32_t>(flags.size()),
 		.pBindingFlags = flags.data(),
 	};
 
@@ -2111,7 +2159,7 @@ void Renderer::createDescriptorSets()
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.pNext = &flagsInfo,
 		.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
-		.bindingCount = bindings.size(),
+		.bindingCount = static_cast<uint32_t>(bindings.size()),
 		.pBindings = bindings.data(),
 	};
 	if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &globalDescriptorSetLayout) != VK_SUCCESS)
@@ -2134,6 +2182,8 @@ void Renderer::createDescriptorSets()
 
 void Renderer::updateTextureDescriptors()
 {
+	ZoneScopedN("Update Texture Descriptors");
+
 	std::vector<VkDescriptorImageInfo> imageDescriptors;
 	imageDescriptors.reserve(textures.size());
 
@@ -2161,6 +2211,8 @@ void Renderer::updateTextureDescriptors()
 
 void Renderer::recreateFrameResourceDrawBuffers(FrameResources& resource, size_t size)
 {
+	ZoneScopedN("Recreate Frame Draw Buffers");
+
 	// Unmap and destroy if buffers already exist
 	if (resource.indirectDrawBuffer.buffer)
 	{

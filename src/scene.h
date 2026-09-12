@@ -16,25 +16,25 @@ class Node
 
 	glm::vec3 getTranslation() const
 	{ return translation; }
-	void setTranslation(const glm::vec3& translation)
+	void setTranslation(const glm::vec3& newTranslation)
 	{
-		this->translation = translation;
+		translation = newTranslation;
 		dirty = true;
 	}
 
 	glm::vec3 getScale() const
 	{ return scale; }
-	void setScale(const glm::vec3& scale)
+	void setScale(const glm::vec3& newScale)
 	{
-		this->scale = scale;
+		scale = newScale;
 		dirty = true;
 	}
 
 	glm::quat getRotation() const
 	{ return rotation; }
-	void setRotation(const glm::quat& rotation)
+	void setRotation(const glm::quat& newRotation)
 	{
-		this->rotation = rotation;
+		rotation = newRotation;
 		dirty = true;
 	}
 
@@ -52,13 +52,13 @@ class Node
 
 		return transform;
 	}
-	void setTransform(const glm::mat4& transform)
+	void setTransform(const glm::mat4& newTransform)
 	{
 		glm::vec3 skew;
 		glm::vec4 perspective;
 		glm::decompose(transform, scale, rotation, translation, skew, perspective);
 
-		this->transform = transform;
+		transform = newTransform;
 		dirty = false;
 	}
 
