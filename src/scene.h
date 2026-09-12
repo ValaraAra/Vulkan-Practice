@@ -74,19 +74,11 @@ class Node
 class Scene
 {
   public:
-	void initialize(const size_t maxNodes)
-	{
-		this->maxNodes = maxNodes;
-		nodes.reserve(maxNodes);
-	}
-
-	size_t getMaxNodes() const
-	{ return maxNodes; }
+	void initialize(const size_t initialNodes)
+	{ nodes.reserve(initialNodes); }
 
 	std::pair<Node&, uint32_t> createNode()
 	{
-		assert(nodes.size() < maxNodes && "Scene is at capacity!");
-
 		nodes.push_back(Node{});
 
 		uint32_t nodeID = static_cast<uint32_t>(nodes.size());
@@ -105,5 +97,4 @@ class Scene
 
   private:
 	std::vector<Node> nodes;
-	size_t maxNodes = 0;
 };
