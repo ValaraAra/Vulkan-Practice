@@ -12,16 +12,18 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(TRACY_ENABLE "Enable Tracy profiler." OFF)
 
+add_library(external STATIC "${CMAKE_CURRENT_SOURCE_DIR}/external/tinygltf.cpp")
+
 add_executable(vulkanapp
-	"${CMAKE_SOURCE_DIR}/src/main.cpp"
-	"${CMAKE_SOURCE_DIR}/src/application.h"
-	"${CMAKE_SOURCE_DIR}/src/application.cpp"
-	"${CMAKE_SOURCE_DIR}/src/renderer.h"
-	"${CMAKE_SOURCE_DIR}/src/renderer.cpp"
-	"${CMAKE_SOURCE_DIR}/src/utility.h"
-	"${CMAKE_SOURCE_DIR}/src/utility.cpp"
-	"${CMAKE_SOURCE_DIR}/src/resources.h"
-	"${CMAKE_SOURCE_DIR}/external/tinygltf.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/src/application.h"
+	"${CMAKE_CURRENT_SOURCE_DIR}/src/application.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/src/renderer.h"
+	"${CMAKE_CURRENT_SOURCE_DIR}/src/renderer.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/src/utility.h"
+	"${CMAKE_CURRENT_SOURCE_DIR}/src/utility.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/src/resources.h"
+	"${CMAKE_CURRENT_SOURCE_DIR}/src/scene.h"
 )
 
 if (MSVC)
@@ -31,7 +33,9 @@ else()
 endif()
 
 get_target_property(TRACY_INCLUDE_DIR Tracy::TracyClient INTERFACE_INCLUDE_DIRECTORIES)
-target_include_directories(vulkanapp PRIVATE "${CMAKE_SOURCE_DIR}/external" "${TRACY_INCLUDE_DIR}")
+
+target_include_directories(external PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external")
+target_include_directories(vulkanapp PRIVATE "${TRACY_INCLUDE_DIR}")
 
 target_compile_definitions(vulkanapp PRIVATE
 	VK_NO_PROTOTYPES
@@ -39,6 +43,7 @@ target_compile_definitions(vulkanapp PRIVATE
 )
 
 target_link_libraries(vulkanapp PRIVATE
+	external
 	Vulkan::volk
 	Vulkan::shaderc_combined
 	SDL3::SDL3
@@ -52,12 +57,12 @@ endif()
 # Copy resources (shaders and assets) to build directory
 file(GLOB_RECURSE SHADERS_RESOURCE_FILES CONFIGURE_DEPENDS
 	LIST_DIRECTORIES false
-	"${CMAKE_SOURCE_DIR}/shaders/*"
+	"${CMAKE_CURRENT_SOURCE_DIR}/shaders/*"
 )
 
 file(GLOB_RECURSE ASSETS_RESOURCE_FILES CONFIGURE_DEPENDS
 	LIST_DIRECTORIES false
-	"${CMAKE_SOURCE_DIR}/assets/*"
+	"${CMAKE_CURRENT_SOURCE_DIR}/assets/*"
 )
 
 set(SHADERS_RESOURCE_STAMP "${CMAKE_BINARY_DIR}/shaders_resources.stamp")
