@@ -228,8 +228,8 @@ void Renderer::render(const glm::mat4& viewProjectionMatrix)
 					// Per render-item data
 					stagedRenderItems.push_back(
 						RenderItem{
-							.wvp = viewProjectionMatrix * worldMatrix,
 							.worldMatrix = worldMatrix,
+							.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix))),
 							.materialIndex = subMesh.materialID - 1,
 						}
 					);
@@ -369,6 +369,7 @@ void Renderer::render(const glm::mat4& viewProjectionMatrix)
 		frameConstants.vertexBufferAddress = vertexBuffer.deviceAddress;
 		frameConstants.materialBufferAddress = materialBuffer.deviceAddress;
 		frameConstants.renderItemsBufferAddress = frameResource.renderItemBuffer.deviceAddress;
+		frameConstants.viewProjection = viewProjectionMatrix;
 
 		// Written immediately to cmd buffer
 		vkCmdPushConstants(

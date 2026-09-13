@@ -9,6 +9,7 @@ layout(push_constant, scalar) uniform FrameConstants
 	uint64_t vertexBufferAddress;
 	uint64_t materialBufferAddress;
 	uint64_t renderItemsBufferAddress;
+	mat4 viewProjection;
 } frameConstants;
 
 struct Vertex
@@ -37,8 +38,8 @@ layout(buffer_reference, scalar) readonly buffer MaterialPtr
 
 struct RenderItem
 {
-	mat4x4 wvp;
-	mat4x4 worldMatrix;
+	mat4 worldMatrix;
+	mat3 normalMatrix;
 	uint materialIndex;
 };
 
@@ -64,11 +65,12 @@ void main()
 	MaterialPtr mBuffer = MaterialPtr(frameConstants.materialBufferAddress);
 	Material mat = mBuffer.materials[ri.materialIndex];
 
-	gl_Position = ri.wvp * vec4(vert.position, 1.0);
+	vec4 worldPos = ri.worldMatrix * vec4(vert.position, 1.0);
+	gl_Position = frameConstants.viewProjection * worldPos;
 
 	outColor = vert.color;
-	outNormal = mat3x3(transpose(inverse(ri.worldMatrix))) * vert.normal;
+	outNormal = ri.normalMatrix * vert.normal;
 	outUV = vert.uv;
-	outTextureIndex = mat.textureID == 0 ? 0 : mat.textureID - 1;;
+	outTextureIndex = mat.textureID == 0 ? 0 : mat.textureID - 1;
 	outMaterialBaseColor = mat.baseColor;
 }

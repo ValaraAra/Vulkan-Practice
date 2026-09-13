@@ -34,8 +34,8 @@ struct GPUBuffer
 
 struct RenderItem
 {
-	glm::mat4 wvp;
 	glm::mat4 worldMatrix;
+	glm::mat3 normalMatrix;
 	uint32_t materialIndex = 0;
 };
 
@@ -57,6 +57,7 @@ struct FrameConstants
 	uint64_t vertexBufferAddress = 0;
 	uint64_t materialBufferAddress = 0;
 	uint64_t renderItemsBufferAddress = 0;
+	glm::mat4 viewProjection;
 };
 
 class RenderError : public std::runtime_error
